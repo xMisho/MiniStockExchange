@@ -3,6 +3,8 @@ package MiniStockExchange;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -63,6 +65,74 @@ public Order getBestSellOrder() {
         }
     }
 
+    public boolean cancelOrder(long orderId) {
+        if (cancelOrder(buyOrders, orderId)) {
+            return true;
+        }
+        return cancelOrder(sellOrders, orderId);
+    }
+
+    private boolean cancelOrder(NavigableMap<BigDecimal, Deque<Order>> orders,
+                                long orderId) {
+        Iterator<Map.Entry<BigDecimal, Deque<Order>>> priceIterator =
+                orders.entrySet().iterator();
+
+        while (priceIterator.hasNext()) {
+            Deque<Order> queue = priceIterator.next().getValue();
+            Iterator<Order> orderIterator = queue.iterator();
+
+            while (orderIterator.hasNext()) {
+                if (orderIterator.next().getOrderId() == orderId) {
+                    orderIterator.remove();
+                    if (queue.isEmpty()) {
+                        priceIterator.remove();
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public BigDecimal getBestBidPrice() {
+        Order bestBuy = getBestBuyOrder();
+        return bestBuy == null ? null : bestBuy.getPrice();
+    }
+
+    public BigDecimal getBestAskPrice() {
+        Order bestSell = getBestSellOrder();
+        return bestSell == null ? null : bestSell.getPrice();
+    }
+
+    public BigDecimal getSpread() {
+        BigDecimal bestBid = getBestBidPrice();
+        BigDecimal bestAsk = getBestAskPrice();
+        if (bestBid == null || bestAsk == null) {
+            return null;
+        }
+        return bestAsk.subtract(bestBid);
+    }
+
+    private int getOrderCount(NavigableMap<BigDecimal, Deque<Order>> orders) {
+        int count = 0;
+        for (Deque<Order> queue : orders.values()) {
+            count += queue.size();
+        }
+        return count;
+    }
+
+    public int getOpenOrderCount() {
+        return getOrderCount(buyOrders) + getOrderCount(sellOrders);
+    }
+
+    public int getBuyOrderCount() {
+        return getOrderCount(buyOrders);
+    }
+
+    public int getSellOrderCount() {
+        return getOrderCount(sellOrders);
+    }
+
     public boolean canMatch() {
         Order buy = getBestBuyOrder();
         Order sell = getBestSellOrder();
@@ -73,4 +143,5 @@ public Order getBestSellOrder() {
         return buy.getPrice().compareTo(sell.getPrice()) >= 0;
     }
 
+   
 }
