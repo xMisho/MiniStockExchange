@@ -7,13 +7,13 @@ Java 17+ · Maven · JUnit 5 · No production dependencies
 ## Features
 
 - Highest bid and lowest ask are matched whenever their prices cross.
-- FIFO queues preserve arrival order among orders at the same price.
+- FIFO queues preserve book insertion order among orders at the same price. Concurrent submissions are ordered by acquisition of the engine lock, not by their creation timestamps.
 - Partial fills leave the unfilled quantity in the book.
 - Each match records an immutable trade at the resting order’s limit price.
 - Cancellation removes an open order and cleans up empty price levels.
 - Order IDs remain reserved after filling or cancellation.
-- Book statistics expose best bid, best ask, spread, and open-order counts.
-- Trade statistics expose execution count and total executed quantity.
+- Book statistics expose best bid, best ask, spread, and open-order counts. A missing side has a `null` best price; spread is `null` unless both sides exist.
+- Trade statistics expose execution count and total executed quantity (shares, not monetary turnover). `getTradeHistory()` returns an unmodifiable snapshot.
 
 ## Technical concepts
 
