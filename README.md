@@ -2,7 +2,7 @@
 
 A Java limit-order-book simulation with price-time priority, partial fills, trade history, order cancellation, and serialized concurrent access.
 
-Java 17+ · Maven · JUnit 5 · No production dependencies
+Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
 ## Features
 
@@ -13,7 +13,7 @@ Java 17+ · Maven · JUnit 5 · No production dependencies
 - Cancellation removes an open order and cleans up empty price levels.
 - Order IDs remain reserved after filling or cancellation.
 - Book statistics expose best bid, best ask, spread, and open-order counts. A missing side has a `null` best price; spread is `null` unless both sides exist.
-- Trade statistics expose execution count and total executed quantity (shares, not monetary turnover). `getTradeHistory()` returns an unmodifiable snapshot.
+- Trade statistics expose trade count and total executed quantity (shares, not monetary turnover). `getTradeHistory()` returns an unmodifiable snapshot.
 
 ## Technical concepts
 
@@ -77,7 +77,8 @@ Surefire writes detailed results to `target/surefire-reports/`. Concurrency test
 
 ## Example behavior
 
-Use these classes from the `com.misho.exchange` package (and import `java.math.BigDecimal` for the exchange example):
+Use these classes from the `com.misho.exchange` package and import
+`java.math.BigDecimal` for prices:
 
 ```java
 MatchingEngine engine = new MatchingEngine(new OrderBook());
