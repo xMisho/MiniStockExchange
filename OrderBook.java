@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
+/** Stores open orders; concurrent access must go through its owning MatchingEngine. */
 public class OrderBook {
 
     private final NavigableMap<BigDecimal, Deque<Order>> buyOrders;
@@ -20,31 +21,29 @@ public class OrderBook {
 
     public void addOrder(Order order) {
         if (order == null) {
-    throw new IllegalArgumentException("Order must not be null.");
-}
-    NavigableMap<BigDecimal, Deque<Order>> orders =
-            order.getSide() == OrderSide.BUY ? buyOrders : sellOrders;
+            throw new IllegalArgumentException("Order must not be null.");
+        }
+        NavigableMap<BigDecimal, Deque<Order>> orders =
+                order.getSide() == OrderSide.BUY ? buyOrders : sellOrders;
 
-    orders.computeIfAbsent(
-            order.getPrice(),
-            price -> new ArrayDeque<>()
-    ).addLast(order);
-}
-
-private Order getBestOrder(NavigableMap<BigDecimal, Deque<Order>> orders) {
-    if (orders.isEmpty()) {
-        return null;
+        orders.computeIfAbsent(order.getPrice(), price -> new ArrayDeque<>())
+                .addLast(order);
     }
-    return orders.firstEntry().getValue().peekFirst();
-}
 
-public Order getBestBuyOrder() {
-    return getBestOrder(buyOrders);
-}
+    private Order getBestOrder(NavigableMap<BigDecimal, Deque<Order>> orders) {
+        if (orders.isEmpty()) {
+            return null;
+        }
+        return orders.firstEntry().getValue().peekFirst();
+    }
 
-public Order getBestSellOrder() {
-    return getBestOrder(sellOrders);
-}
+    public Order getBestBuyOrder() {
+        return getBestOrder(buyOrders);
+    }
+
+    public Order getBestSellOrder() {
+        return getBestOrder(sellOrders);
+    }
 
     public void removeFilledOrders() {
         removeFilledOrders(buyOrders);
@@ -142,6 +141,4 @@ public Order getBestSellOrder() {
         }
         return buy.getPrice().compareTo(sell.getPrice()) >= 0;
     }
-
-   
 }

@@ -12,6 +12,9 @@ public class Order {
     private final long timestamp;
 
     public Order(long orderId, OrderSide side, BigDecimal price, int quantity) {
+        if (orderId <= 0) {
+            throw new IllegalArgumentException("Order ID must be positive.");
+        }
         if (side == null) {
             throw new IllegalArgumentException("Side must not be null.");
         }
