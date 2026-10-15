@@ -1,4 +1,4 @@
-package MiniStockExchange;
+package com.misho.exchange;
 
 import java.math.BigDecimal;
 

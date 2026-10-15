@@ -1,13 +1,17 @@
-package MiniStockExchange;
+package com.misho.exchange;
 
 import java.math.BigDecimal;
 import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class Test {
+@Timeout(30)
+class MiniStockExchangeTest {
 
-    public static void main(String[] args) throws InterruptedException {
+    @Test
+    void recordsTradeAndPartialFill() {
         MatchingEngine engine = new MatchingEngine(new OrderBook());
         Order sell = new Order(23, OrderSide.SELL, new BigDecimal("100"), 4);
         Order buy = new Order(15, OrderSide.BUY, new BigDecimal("101"), 10);
@@ -37,6 +41,10 @@ public class Test {
         System.out.println("Quantity: " + trade.getQuantity());
         System.out.println("Trade history test passed.");
 
+    }
+
+    @Test
+    void cancelsOrder() {
         System.out.println("\n=== CANCELLATION TEST ===");
         OrderBook book = new OrderBook();
         MatchingEngine cancellationEngine = new MatchingEngine(book);
@@ -53,6 +61,10 @@ public class Test {
         }
         System.out.println("Cancellation test passed.");
 
+    }
+
+    @Test
+    void reportsMarketStatistics() {
         System.out.println("\n=== MARKET STATISTICS TEST ===");
         OrderBook statsBook = new OrderBook();
         MatchingEngine statsEngine = new MatchingEngine(statsBook);
@@ -107,6 +119,10 @@ public class Test {
         System.out.println("Total traded volume: " + statsEngine.getTotalTradedVolume());
         System.out.println("Market statistics test passed.");
 
+    }
+
+    @Test
+    void rejectsDuplicateIds() {
         System.out.println("\n=== DUPLICATE ORDER ID TEST ===");
         MatchingEngine duplicateIdEngine = new MatchingEngine(new OrderBook());
         duplicateIdEngine.submitOrder(
@@ -122,6 +138,10 @@ public class Test {
             System.out.println("Duplicate ID correctly rejected.");
         }
 
+    }
+
+    @Test
+    void matchesSamePriceInFifoOrder() {
         System.out.println("\n=== FIFO AT THE SAME PRICE TEST ===");
         OrderBook fifoBook = new OrderBook();
         MatchingEngine fifoEngine = new MatchingEngine(fifoBook);
@@ -165,6 +185,10 @@ public class Test {
         System.out.println("Trade 2: BUY #200 vs SELL #102, quantity 2");
         System.out.println("FIFO test passed.");
 
+    }
+
+    @Test
+    void incomingBuyUsesRestingSellPrice() {
         System.out.println("\n=== INCOMING BUY EXECUTION PRICE TEST ===");
         MatchingEngine incomingBuyEngine = new MatchingEngine(new OrderBook());
         incomingBuyEngine.submitOrder(
@@ -181,6 +205,10 @@ public class Test {
         }
         System.out.println("Incoming BUY execution price test passed: 100.");
 
+    }
+
+    @Test
+    void incomingSellUsesRestingBuyPrice() {
         System.out.println("\n=== INCOMING SELL EXECUTION PRICE TEST ===");
         MatchingEngine incomingSellEngine = new MatchingEngine(new OrderBook());
         incomingSellEngine.submitOrder(
@@ -197,6 +225,10 @@ public class Test {
         }
         System.out.println("Incoming SELL execution price test passed: 105.");
 
+    }
+
+    @Test
+    void cancelsNonBestPriceLevel() {
         System.out.println("\n=== NON-BEST PRICE LEVEL CANCELLATION TEST ===");
         OrderBook deeperBook = new OrderBook();
         MatchingEngine deeperEngine = new MatchingEngine(deeperBook);
@@ -220,10 +252,10 @@ public class Test {
         }
         System.out.println("Non-best price level cancellation test passed.");
 
-        runMultithreadedStressTest();
     }
 
-    private static void runMultithreadedStressTest() throws InterruptedException {
+    @Test
+    void matchesConcurrentOrdersWhileReadingStatistics() throws InterruptedException {
         System.out.println("\n=== MULTITHREADED STRESS TEST ===");
 
         MatchingEngine engine = new MatchingEngine(new OrderBook());
