@@ -30,6 +30,84 @@ public class OrderBook {
                 .addLast(order);
     }
 
+    Order findOrder(long orderId) {
+        Order order = findOrder(buyOrders, orderId);
+
+        if (order != null) {
+            return order;
+        }
+
+        return findOrder(sellOrders, orderId);
+    }
+
+    private Order findOrder(NavigableMap<BigDecimal, Deque<Order>> orders,
+                            long orderId) {
+        for (Deque<Order> queue : orders.values()) {
+            for (Order order : queue) {
+                if (order.getOrderId() == orderId) {
+                    return order;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    Order amendOrder(
+            long orderId,
+            BigDecimal newPrice,
+            int newRemainingQuantity) {
+
+        Order order = findOrder(orderId);
+
+        if (order == null) {
+            return null;
+        }
+
+        if (newPrice == null || newPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Price must be positive.");
+        }
+        if (newRemainingQuantity <= 0) {
+            throw new IllegalArgumentException("Remaining quantity must be positive.");
+        }
+
+        boolean samePrice =
+                order.getPrice().compareTo(newPrice) == 0;
+
+        int oldRemainingQuantity =
+                order.getRemainingQuantity();
+
+        if (samePrice && newRemainingQuantity <= oldRemainingQuantity) {
+            order.amend(newPrice, newRemainingQuantity);
+            return order;
+        }
+
+        removeOrder(order);
+        order.amend(newPrice, newRemainingQuantity);
+        addOrder(order);
+
+        return order;
+    }
+
+    private boolean removeOrder(Order order) {
+        NavigableMap<BigDecimal, Deque<Order>> orders =
+                order.getSide() == OrderSide.BUY ? buyOrders : sellOrders;
+
+        Deque<Order> queue = orders.get(order.getPrice());
+
+        if (queue == null) {
+            return false;
+        }
+
+        boolean removed = queue.remove(order);
+
+        if (queue.isEmpty()) {
+            orders.remove(order.getPrice());
+        }
+
+        return removed;
+    }
+
     private Order getBestOrder(NavigableMap<BigDecimal, Deque<Order>> orders) {
         if (orders.isEmpty()) {
             return null;

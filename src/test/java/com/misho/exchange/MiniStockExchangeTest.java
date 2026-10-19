@@ -1,5 +1,11 @@
 package com.misho.exchange;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -406,4 +412,263 @@ class MiniStockExchangeTest {
         System.out.println("Open orders: " + engine.getOpenOrderCount());
         System.out.println("Multithreaded stress test passed.");
     }
+
+    @Test
+    void invalidAmendmentPricesLeaveBookUnchanged() {
+        OrderBook book = new OrderBook();
+        Order first = new Order(701, OrderSide.SELL, new BigDecimal("100"), 5);
+        book.addOrder(first);
+        book.addOrder(new Order(702, OrderSide.SELL, new BigDecimal("100"), 5));
+
+        for (BigDecimal price : new BigDecimal[]{null, BigDecimal.ZERO, new BigDecimal("-1")}) {
+            assertThrows(IllegalArgumentException.class, () -> book.amendOrder(701, price, 8));
+            assertSame(first, book.findOrder(701));
+            assertSame(first, book.getBestSellOrder());
+            assertEquals(new BigDecimal("100"), first.getPrice());
+            assertEquals(5, first.getRemainingQuantity());
+            assertEquals(2, book.getOpenOrderCount());
+        }
+    }
+
+    @Test
+    void invalidAmendmentQuantitiesLeaveBookUnchanged() {
+        OrderBook book = new OrderBook();
+        Order first = new Order(703, OrderSide.BUY, new BigDecimal("100"), 5);
+        book.addOrder(first);
+        book.addOrder(new Order(704, OrderSide.BUY, new BigDecimal("100"), 5));
+
+        for (int quantity : new int[]{0, -1}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> book.amendOrder(703, new BigDecimal("101"), quantity));
+            assertSame(first, book.findOrder(703));
+            assertSame(first, book.getBestBuyOrder());
+            assertEquals(new BigDecimal("100"), first.getPrice());
+            assertEquals(5, first.getRemainingQuantity());
+            assertEquals(2, book.getOpenOrderCount());
+        }
+    }
+
+    @Test
+    void absentOrdersReturnNullBeforeValidatingAmendmentValues() {
+        OrderBook book = new OrderBook();
+        MatchingEngine engine = new MatchingEngine(book);
+        assertNull(book.amendOrder(9999, null, -5));
+
+        engine.submitOrder(new Order(801, OrderSide.BUY, new BigDecimal("100"), 5));
+        engine.cancelOrder(801);
+        assertNull(book.amendOrder(801, null, -5));
+
+        engine.submitOrder(new Order(802, OrderSide.SELL, new BigDecimal("100"), 5));
+        engine.submitOrder(new Order(803, OrderSide.BUY, new BigDecimal("100"), 5));
+        assertNull(book.amendOrder(802, null, -5));
+        assertNull(book.amendOrder(803, null, -5));
+        assertEquals(0, book.getOpenOrderCount());
+    }
+
+    @Test
+void amendReducingQuantityPreservesFifoPriority() {
+    MatchingEngine engine = new MatchingEngine(new OrderBook());
+
+    Order firstSell = new Order(
+            1001,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    Order secondSell = new Order(
+            1002,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    engine.submitOrder(firstSell);
+    engine.submitOrder(secondSell);
+
+    boolean amended = engine.amendOrder(
+            1001,
+            new BigDecimal("100"),
+            3
+    );
+
+    assertTrue(amended);
+
+    Order buy = new Order(
+            1003,
+            OrderSide.BUY,
+            new BigDecimal("100"),
+            4
+    );
+
+    engine.submitOrder(buy);
+
+    List<Trade> trades = engine.getTradeHistory();
+
+    assertEquals(2, trades.size());
+
+    assertEquals(1001, trades.get(0).getSellOrderId());
+    assertEquals(3, trades.get(0).getQuantity());
+
+    assertEquals(1002, trades.get(1).getSellOrderId());
+    assertEquals(1, trades.get(1).getQuantity());
+
+    assertTrue(firstSell.isFilled());
+    assertEquals(4, secondSell.getRemainingQuantity());
+}
+@Test
+void amendIncreasingQuantityLosesFifoPriority() {
+    MatchingEngine engine = new MatchingEngine(new OrderBook());
+
+    Order firstSell = new Order(
+            1101,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    Order secondSell = new Order(
+            1102,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    engine.submitOrder(firstSell);
+    engine.submitOrder(secondSell);
+
+    boolean amended = engine.amendOrder(
+            1101,
+            new BigDecimal("100"),
+            8
+    );
+
+    assertTrue(amended);
+
+    Order buy = new Order(
+            1103,
+            OrderSide.BUY,
+            new BigDecimal("100"),
+            6
+    );
+
+    engine.submitOrder(buy);
+
+    List<Trade> trades = engine.getTradeHistory();
+
+    assertEquals(2, trades.size());
+
+    assertEquals(1102, trades.get(0).getSellOrderId());
+    assertEquals(5, trades.get(0).getQuantity());
+
+    assertEquals(1101, trades.get(1).getSellOrderId());
+    assertEquals(1, trades.get(1).getQuantity());
+
+    assertTrue(secondSell.isFilled());
+    assertEquals(7, firstSell.getRemainingQuantity());
+}
+
+@Test
+void amendChangingPriceMovesOrderAndLosesFifoPriority() {
+    MatchingEngine engine = new MatchingEngine(new OrderBook());
+
+    Order firstSell = new Order(
+            1201,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    Order secondSell = new Order(
+            1202,
+            OrderSide.SELL,
+            new BigDecimal("101"),
+            5
+    );
+
+    engine.submitOrder(firstSell);
+    engine.submitOrder(secondSell);
+
+    boolean amended = engine.amendOrder(
+            1201,
+            new BigDecimal("101"),
+            5
+    );
+
+    assertTrue(amended);
+    assertEquals(new BigDecimal("101"), firstSell.getPrice());
+
+    Order buy = new Order(
+            1203,
+            OrderSide.BUY,
+            new BigDecimal("101"),
+            6
+    );
+
+    engine.submitOrder(buy);
+
+    List<Trade> trades = engine.getTradeHistory();
+
+    assertEquals(2, trades.size());
+
+    assertEquals(1202, trades.get(0).getSellOrderId());
+    assertEquals(5, trades.get(0).getQuantity());
+
+    assertEquals(1201, trades.get(1).getSellOrderId());
+    assertEquals(1, trades.get(1).getQuantity());
+
+    assertTrue(secondSell.isFilled());
+    assertEquals(4, firstSell.getRemainingQuantity());
+}
+
+@Test
+void amendPriceCrossingSpreadTriggersImmediateTrade() {
+    MatchingEngine engine = new MatchingEngine(new OrderBook());
+
+    Order buy = new Order(
+            1301,
+            OrderSide.BUY,
+            new BigDecimal("95"),
+            5
+    );
+
+    Order sell = new Order(
+            1302,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            3
+    );
+
+    engine.submitOrder(buy);
+    engine.submitOrder(sell);
+
+    assertEquals(0, engine.getTradeCount());
+
+    boolean amended = engine.amendOrder(
+            1301,
+            new BigDecimal("101"),
+            5
+    );
+
+    assertTrue(amended);
+
+    List<Trade> trades = engine.getTradeHistory();
+
+    assertEquals(1, trades.size());
+
+    Trade trade = trades.get(0);
+
+    assertEquals(1301, trade.getBuyOrderId());
+    assertEquals(1302, trade.getSellOrderId());
+    assertEquals(new BigDecimal("100"), trade.getExecutionPrice());
+    assertEquals(3, trade.getQuantity());
+
+    assertTrue(sell.isFilled());
+    assertEquals(2, buy.getRemainingQuantity());
+
+    assertEquals(1, engine.getOpenOrderCount());
+    assertEquals(new BigDecimal("101"), engine.getBestBidPrice());
+    assertNull(engine.getBestAskPrice());
+}
+
 }

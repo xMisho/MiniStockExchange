@@ -82,6 +82,27 @@ public class MatchingEngine {
         }
     }
 
+    public boolean amendOrder(
+        long orderId,
+        BigDecimal newPrice,
+        int newRemainingQuantity) {
+
+    lock.lock();
+    try {
+        Order amendedOrder =
+                orderBook.amendOrder(orderId, newPrice, newRemainingQuantity);
+
+        if (amendedOrder == null) {
+            return false;
+        }
+
+        matchOrders(amendedOrder);
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+
     public int getTradeCount() {
         lock.lock();
         try {

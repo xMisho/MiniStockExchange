@@ -6,7 +6,7 @@ public class Order {
 
     private final long orderId;
     private final OrderSide side;
-    private final BigDecimal price;
+    private BigDecimal price;
     private final int originalQuantity;
     private int remainingQuantity;
     private final long timestamp;
@@ -55,6 +55,23 @@ public class Order {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    void amend(BigDecimal newPrice, int newRemainingQuantity) {
+        if (newPrice == null || newPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Price must be positive.");
+        }
+
+        if (newRemainingQuantity <= 0) {
+            throw new IllegalArgumentException("Remaining quantity must be positive.");
+        }
+
+        if (isFilled()) {
+            throw new IllegalStateException("Filled order cannot be amended.");
+        }
+
+        this.price = newPrice;
+        this.remainingQuantity = newRemainingQuantity;
     }
 
     public void fill(int quantity) {
