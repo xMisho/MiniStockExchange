@@ -11,15 +11,22 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MatchingEngine {
 
     private final OrderBook orderBook;
+    private final Stock stock;
     private final List<Trade> tradeHistory;
     private final Set<Long> usedOrderIds;
     private final ReentrantLock lock;
+    
 
     public MatchingEngine(OrderBook orderBook) {
+        this(orderBook, null);
+    }
+
+    public MatchingEngine(OrderBook orderBook, Stock stock) {
         if (orderBook == null) {
             throw new IllegalArgumentException("Order book must not be null.");
         }
         this.orderBook = orderBook;
+        this.stock = stock;
         this.tradeHistory = new ArrayList<>();
         this.usedOrderIds = new HashSet<>();
         this.lock = new ReentrantLock();
@@ -60,6 +67,11 @@ public class MatchingEngine {
             buy.fill(quantity);
             sell.fill(quantity);
             tradeHistory.add(trade);
+
+            if (stock != null) {
+                stock.updateLastTradedPrice(trade.getExecutionPrice());
+            }
+
             orderBook.removeFilledOrders();
         }
     }

@@ -7,6 +7,7 @@ public class Stock {
     private final String symbol;
     private final String companyName;
     private final BigDecimal referencePrice;
+    private volatile BigDecimal lastTradedPrice;
 
     public Stock(
         String symbol,
@@ -29,6 +30,7 @@ public class Stock {
    this.symbol = symbol.trim().toUpperCase();
     this.companyName = companyName;
     this.referencePrice = referencePrice;
+    this.lastTradedPrice = null;
 }
 
 public String getSymbol() {
@@ -43,7 +45,19 @@ public BigDecimal getReferencePrice() {
     return referencePrice;
 }
 
+public BigDecimal getLastTradedPrice() {
+    return lastTradedPrice;
+}
 
+void updateLastTradedPrice(BigDecimal executionPrice) {
+    if (executionPrice == null ||
+            executionPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new IllegalArgumentException(
+                "Execution price must be positive."
+        );
+    }
 
+    this.lastTradedPrice = executionPrice;
+}
 
 }

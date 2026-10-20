@@ -29,7 +29,7 @@ public class Exchange {
     }
 
     stocks.put(symbol, stock);
-    engines.put(symbol, new MatchingEngine(new OrderBook()));
+    engines.put(symbol, new MatchingEngine(new OrderBook(), stock));
 }
 
 public Stock getStock(String symbol) {
@@ -108,4 +108,13 @@ public List<Trade> getTradeHistory(String symbol) {
     return getEngineOrThrow(symbol).getTradeHistory();
 }
 
+    public BigDecimal getLastTradedPrice(String symbol) {
+        Stock stock = getStock(symbol);
+
+        if (stock == null) {
+            throw new IllegalArgumentException("Stock is not registered.");
+        }
+
+        return stock.getLastTradedPrice();
+    }
 }

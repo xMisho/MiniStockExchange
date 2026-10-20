@@ -904,4 +904,207 @@ void marketStatisticsAreIndependentPerStock() {
     assertNull(exchange.getSpread("NVDA"));
 }
 
+
+    @Test
+    void lastTradedPriceUpdatesOnlyAfterTrade() {
+        Exchange exchange = new Exchange();
+
+        exchange.registerStock(new Stock(
+                "AAPL",
+                "Apple Inc.",
+                new BigDecimal("250.00")
+        ));
+
+        assertNull(exchange.getLastTradedPrice("AAPL"));
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        1,
+                        OrderSide.BUY,
+                        new BigDecimal("249"),
+                        5
+                )
+        );
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        2,
+                        OrderSide.SELL,
+                        new BigDecimal("251"),
+                        5
+                )
+        );
+
+        assertNull(exchange.getLastTradedPrice("AAPL"));
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        3,
+                        OrderSide.BUY,
+                        new BigDecimal("252"),
+                        5
+                )
+        );
+
+        assertEquals(
+                new BigDecimal("251"),
+                exchange.getLastTradedPrice("AAPL")
+        );
+    }
+
+    @Test
+void lastTradedPricesUpdateIndependentlyPerStock() {
+    Exchange exchange = new Exchange();
+
+    exchange.registerStock(new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    ));
+
+    exchange.registerStock(new Stock(
+            "NVDA",
+            "NVIDIA Corp.",
+            new BigDecimal("190.00")
+    ));
+
+    // First AAPL trade executes at the resting SELL price: 251
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    1,
+                    OrderSide.SELL,
+                    new BigDecimal("251"),
+                    2
+            )
+    );
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    2,
+                    OrderSide.BUY,
+                    new BigDecimal("252"),
+                    2
+            )
+    );
+
+    assertEquals(
+            new BigDecimal("251"),
+            exchange.getLastTradedPrice("AAPL")
+    );
+
+    assertNull(exchange.getLastTradedPrice("NVDA"));
+
+    // Second AAPL trade becomes the new last traded price
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    3,
+                    OrderSide.SELL,
+                    new BigDecimal("253"),
+                    1
+            )
+    );
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    4,
+                    OrderSide.BUY,
+                    new BigDecimal("254"),
+                    1
+            )
+    );
+
+    assertEquals(
+            new BigDecimal("253"),
+            exchange.getLastTradedPrice("AAPL")
+    );
+
+    // NVDA now trades independently
+    exchange.submitOrder(
+            "NVDA",
+            new Order(
+                    1,
+                    OrderSide.SELL,
+                    new BigDecimal("191"),
+                    1
+            )
+    );
+
+    exchange.submitOrder(
+            "NVDA",
+            new Order(
+                    2,
+                    OrderSide.BUY,
+                    new BigDecimal("192"),
+                    1
+            )
+    );
+
+    assertEquals(
+            new BigDecimal("191"),
+            exchange.getLastTradedPrice("NVDA")
+    );
+
+    // NVDA trading must not change AAPL's price
+    assertEquals(
+            new BigDecimal("253"),
+            exchange.getLastTradedPrice("AAPL")
+    );
+}
+
+@Test
+void amendmentTriggeredTradeUpdatesLastTradedPrice() {
+    Exchange exchange = new Exchange();
+
+    exchange.registerStock(new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    ));
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    1,
+                    OrderSide.BUY,
+                    new BigDecimal("95"),
+                    5
+            )
+    );
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    2,
+                    OrderSide.SELL,
+                    new BigDecimal("100"),
+                    3
+            )
+    );
+
+    assertNull(exchange.getLastTradedPrice("AAPL"));
+
+    boolean amended = exchange.amendOrder(
+            "AAPL",
+            1,
+            new BigDecimal("101"),
+            5
+    );
+
+    assertTrue(amended);
+
+    assertEquals(
+            new BigDecimal("100"),
+            exchange.getLastTradedPrice("AAPL")
+    );
+
+    assertEquals(1, exchange.getTradeCount("AAPL"));
+    assertEquals(3, exchange.getTotalTradedVolume("AAPL"));
+}
 }
