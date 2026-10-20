@@ -671,4 +671,237 @@ void amendPriceCrossingSpreadTriggersImmediateTrade() {
     assertNull(engine.getBestAskPrice());
 }
 
+@Test
+void registersStocksAndRejectsDuplicateSymbols() {
+    Exchange exchange = new Exchange();
+
+    Stock apple = new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    );
+
+    Stock nvidia = new Stock(
+            "nvda",
+            "NVIDIA Corp.",
+            new BigDecimal("190.00")
+    );
+
+    exchange.registerStock(apple);
+    exchange.registerStock(nvidia);
+
+    assertEquals(2, exchange.getStockCount());
+
+    assertSame(apple, exchange.getStock("AAPL"));
+    assertSame(apple, exchange.getStock("aapl"));
+
+    assertSame(nvidia, exchange.getStock("NVDA"));
+    assertEquals("NVDA", nvidia.getSymbol());
+
+    Stock duplicateApple = new Stock(
+            " aapl ",
+            "Different Apple",
+            new BigDecimal("300.00")
+    );
+
+    assertThrows(
+            IllegalArgumentException.class,
+            () -> exchange.registerStock(duplicateApple)
+    );
+
+    assertEquals(2, exchange.getStockCount());
+}
+
+@Test
+void stockOrderBooksAreIsolated() {
+    Exchange exchange = new Exchange();
+
+    exchange.registerStock(new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    ));
+
+    exchange.registerStock(new Stock(
+            "NVDA",
+            "NVIDIA Corp.",
+            new BigDecimal("190.00")
+    ));
+
+    Order appleBuy = new Order(
+            1,
+            OrderSide.BUY,
+            new BigDecimal("150"),
+            5
+    );
+
+    Order nvidiaSell = new Order(
+            1,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            5
+    );
+
+    exchange.submitOrder("AAPL", appleBuy);
+    exchange.submitOrder("NVDA", nvidiaSell);
+
+    assertEquals(0, exchange.getTradeCount("AAPL"));
+    assertEquals(0, exchange.getTradeCount("NVDA"));
+
+    assertEquals(1, exchange.getOpenOrderCount("AAPL"));
+    assertEquals(1, exchange.getOpenOrderCount("NVDA"));
+
+    Order appleSell = new Order(
+            2,
+            OrderSide.SELL,
+            new BigDecimal("140"),
+            5
+    );
+
+    exchange.submitOrder("AAPL", appleSell);
+
+    assertEquals(1, exchange.getTradeCount("AAPL"));
+    assertEquals(0, exchange.getTradeCount("NVDA"));
+
+    assertEquals(0, exchange.getOpenOrderCount("AAPL"));
+    assertEquals(1, exchange.getOpenOrderCount("NVDA"));
+}
+
+@Test
+void cancellationAndAmendmentAreRoutedToCorrectStock() {
+    Exchange exchange = new Exchange();
+
+    exchange.registerStock(new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    ));
+
+    exchange.registerStock(new Stock(
+            "NVDA",
+            "NVIDIA Corp.",
+            new BigDecimal("190.00")
+    ));
+
+    Order appleBuy = new Order(
+            10,
+            OrderSide.BUY,
+            new BigDecimal("90"),
+            5
+    );
+
+    Order appleSell = new Order(
+            11,
+            OrderSide.SELL,
+            new BigDecimal("100"),
+            3
+    );
+
+    Order nvidiaBuy = new Order(
+            10,
+            OrderSide.BUY,
+            new BigDecimal("180"),
+            5
+    );
+
+    exchange.submitOrder("AAPL", appleBuy);
+    exchange.submitOrder("AAPL", appleSell);
+    exchange.submitOrder("NVDA", nvidiaBuy);
+
+    boolean amended = exchange.amendOrder(
+            "AAPL",
+            10,
+            new BigDecimal("101"),
+            5
+    );
+
+    assertTrue(amended);
+
+    assertEquals(1, exchange.getTradeCount("AAPL"));
+    assertEquals(0, exchange.getTradeCount("NVDA"));
+
+    assertEquals(1, exchange.getOpenOrderCount("AAPL"));
+    assertEquals(1, exchange.getOpenOrderCount("NVDA"));
+
+    boolean cancelled = exchange.cancelOrder("NVDA", 10);
+
+    assertTrue(cancelled);
+
+    assertEquals(1, exchange.getOpenOrderCount("AAPL"));
+    assertEquals(0, exchange.getOpenOrderCount("NVDA"));
+}
+
+@Test
+void marketStatisticsAreIndependentPerStock() {
+    Exchange exchange = new Exchange();
+
+    exchange.registerStock(new Stock(
+            "AAPL",
+            "Apple Inc.",
+            new BigDecimal("250.00")
+    ));
+
+    exchange.registerStock(new Stock(
+            "NVDA",
+            "NVIDIA Corp.",
+            new BigDecimal("190.00")
+    ));
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    1,
+                    OrderSide.BUY,
+                    new BigDecimal("100"),
+                    10
+            )
+    );
+
+    exchange.submitOrder(
+            "AAPL",
+            new Order(
+                    2,
+                    OrderSide.SELL,
+                    new BigDecimal("105"),
+                    5
+            )
+    );
+
+    exchange.submitOrder(
+            "NVDA",
+            new Order(
+                    1,
+                    OrderSide.BUY,
+                    new BigDecimal("200"),
+                    4
+            )
+    );
+
+    exchange.submitOrder(
+            "NVDA",
+            new Order(
+                    2,
+                    OrderSide.SELL,
+                    new BigDecimal("199"),
+                    4
+            )
+    );
+
+    assertEquals(new BigDecimal("100"), exchange.getBestBidPrice("AAPL"));
+    assertEquals(new BigDecimal("105"), exchange.getBestAskPrice("AAPL"));
+    assertEquals(new BigDecimal("5"), exchange.getSpread("AAPL"));
+
+    assertEquals(0, exchange.getTradeCount("AAPL"));
+    assertEquals(0, exchange.getTotalTradedVolume("AAPL"));
+    assertEquals(0, exchange.getTradeHistory("AAPL").size());
+
+    assertEquals(1, exchange.getTradeCount("NVDA"));
+    assertEquals(4, exchange.getTotalTradedVolume("NVDA"));
+    assertEquals(1, exchange.getTradeHistory("NVDA").size());
+
+    assertNull(exchange.getBestBidPrice("NVDA"));
+    assertNull(exchange.getBestAskPrice("NVDA"));
+    assertNull(exchange.getSpread("NVDA"));
+}
+
 }
