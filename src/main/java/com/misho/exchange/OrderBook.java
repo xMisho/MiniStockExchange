@@ -162,7 +162,9 @@ public class OrderBook {
             Iterator<Order> orderIterator = queue.iterator();
 
             while (orderIterator.hasNext()) {
-                if (orderIterator.next().getOrderId() == orderId) {
+                Order order = orderIterator.next();
+                if (order.getOrderId() == orderId) {
+                    order.cancel();
                     orderIterator.remove();
                     if (queue.isEmpty()) {
                         priceIterator.remove();

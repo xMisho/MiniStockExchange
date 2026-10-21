@@ -112,6 +112,10 @@ public class MatchingEngine {
             executeTrade(buy, sell, quantity, executionPrice);
             orderBook.removeFilledOrders();
         }
+
+        if (!marketOrder.isFilled()) {
+            marketOrder.cancel();
+        }
     }
 
     public List<Trade> getTradeHistory() {

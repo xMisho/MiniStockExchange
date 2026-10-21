@@ -10,6 +10,8 @@ public class Order {
     private BigDecimal price;
     private final int originalQuantity;
     private int remainingQuantity;
+    private int filledQuantity;
+    private OrderStatus status;
     private final long timestamp;
 
     public Order(long orderId, OrderSide side, BigDecimal price, int quantity) {
@@ -44,6 +46,8 @@ public class Order {
         this.price = price;
         this.originalQuantity = quantity;
         this.remainingQuantity = quantity;
+        this.filledQuantity = 0;
+        this.status = OrderStatus.OPEN;
         this.timestamp = System.currentTimeMillis();
     }
 
@@ -71,6 +75,22 @@ public class Order {
         return remainingQuantity;
     }
 
+    public int getFilledQuantity() {
+        return filledQuantity;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public boolean isCancelled() {
+        return status == OrderStatus.CANCELLED;
+    }
+
+    public boolean isActive() {
+        return status == OrderStatus.OPEN || status == OrderStatus.PARTIALLY_FILLED;
+    }
+
     public long getTimestamp() {
         return timestamp;
     }
@@ -84,23 +104,41 @@ public class Order {
             throw new IllegalArgumentException("Remaining quantity must be positive.");
         }
 
-        if (isFilled()) {
-            throw new IllegalStateException("Filled order cannot be amended.");
+        if (!isActive()) {
+            throw new IllegalStateException("Inactive order cannot be amended.");
         }
 
         this.price = newPrice;
         this.remainingQuantity = newRemainingQuantity;
     }
 
-    public void fill(int quantity) {
-        if (quantity <= 0 || quantity > remainingQuantity) {
-            throw new IllegalArgumentException("Fill quantity must be positive and not exceed remaining quantity.");
+    void fill(int quantity) {
+        if (!isActive()) {
+            throw new IllegalStateException("Inactive order cannot be filled.");
         }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Fill quantity must be positive.");
+        }
+        if (quantity > remainingQuantity) {
+            throw new IllegalArgumentException("Fill quantity cannot exceed remaining quantity.");
+        }
+
         remainingQuantity -= quantity;
+        filledQuantity += quantity;
+        status = remainingQuantity == 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
     }
 
     public boolean isFilled() {
-        return remainingQuantity == 0;
+        return status == OrderStatus.FILLED;
     }
 
+    void cancel() {
+        if (status == OrderStatus.FILLED) {
+            throw new IllegalStateException("Filled order cannot be cancelled.");
+        }
+        if (status == OrderStatus.CANCELLED) {
+            return;
+        }
+        status = OrderStatus.CANCELLED;
+    }
 }

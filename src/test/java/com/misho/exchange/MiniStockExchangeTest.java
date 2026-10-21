@@ -1343,4 +1343,259 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
 
         assertEquals(0, exchange.getOpenOrderCount("AAPL"));
     }
+
+    @Test
+    void newOrderStartsOpen() {
+        Order order = new Order(
+                3001,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                10
+        );
+
+        assertEquals(OrderStatus.OPEN, order.getStatus());
+        assertEquals(0, order.getFilledQuantity());
+        assertEquals(10, order.getRemainingQuantity());
+        assertTrue(order.isActive());
+        assertFalse(order.isFilled());
+        assertFalse(order.isCancelled());
+    }
+
+    @Test
+    void partialFillUpdatesOrderStatus() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order sell = new Order(
+                3101,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                10
+        );
+
+        Order buy = new Order(
+                3102,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                4
+        );
+
+        engine.submitOrder(sell);
+        engine.submitOrder(buy);
+
+        assertEquals(
+                OrderStatus.PARTIALLY_FILLED,
+                sell.getStatus()
+        );
+
+        assertEquals(4, sell.getFilledQuantity());
+        assertEquals(6, sell.getRemainingQuantity());
+        assertTrue(sell.isActive());
+
+        assertEquals(OrderStatus.FILLED, buy.getStatus());
+    }
+
+    @Test
+    void fullFillUpdatesOrderStatus() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order sell = new Order(
+                3201,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                5
+        );
+
+        Order buy = new Order(
+                3202,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(sell);
+        engine.submitOrder(buy);
+
+        assertEquals(OrderStatus.FILLED, sell.getStatus());
+        assertEquals(OrderStatus.FILLED, buy.getStatus());
+
+        assertEquals(5, sell.getFilledQuantity());
+        assertEquals(5, buy.getFilledQuantity());
+
+        assertEquals(0, sell.getRemainingQuantity());
+        assertEquals(0, buy.getRemainingQuantity());
+
+        assertFalse(sell.isActive());
+        assertFalse(buy.isActive());
+    }
+
+    @Test
+    void cancelledLimitOrderUpdatesStatus() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order buy = new Order(
+                3301,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(buy);
+
+        assertEquals(OrderStatus.OPEN, buy.getStatus());
+
+        assertTrue(engine.cancelOrder(3301));
+
+        assertEquals(OrderStatus.CANCELLED, buy.getStatus());
+        assertTrue(buy.isCancelled());
+        assertFalse(buy.isActive());
+
+        assertEquals(0, buy.getFilledQuantity());
+        assertEquals(5, buy.getRemainingQuantity());
+
+        assertFalse(engine.cancelOrder(3301));
+    }
+
+    @Test
+    void partiallyFilledLimitOrderCanBeCancelled() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order sell = new Order(
+                3401,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                10
+        );
+
+        engine.submitOrder(sell);
+
+        engine.submitOrder(
+                new Order(
+                        3402,
+                        OrderSide.BUY,
+                        new BigDecimal("100"),
+                        4
+                )
+        );
+
+        assertEquals(
+                OrderStatus.PARTIALLY_FILLED,
+                sell.getStatus()
+        );
+
+        assertEquals(4, sell.getFilledQuantity());
+        assertEquals(6, sell.getRemainingQuantity());
+
+        assertTrue(engine.cancelOrder(3401));
+
+        assertEquals(
+                OrderStatus.CANCELLED,
+                sell.getStatus()
+        );
+
+        assertEquals(4, sell.getFilledQuantity());
+        assertEquals(6, sell.getRemainingQuantity());
+        assertFalse(sell.isActive());
+    }
+
+    @Test
+    void partiallyFilledMarketOrderCancelsRemainder() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(
+                new Order(
+                        3501,
+                        OrderSide.SELL,
+                        new BigDecimal("100"),
+                        2
+                )
+        );
+
+        Order marketBuy = new Order(
+                3502,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(
+                OrderStatus.CANCELLED,
+                marketBuy.getStatus()
+        );
+
+        assertEquals(2, marketBuy.getFilledQuantity());
+        assertEquals(3, marketBuy.getRemainingQuantity());
+
+        assertTrue(marketBuy.isCancelled());
+        assertFalse(marketBuy.isActive());
+    }
+
+    @Test
+    void marketOrderWithNoLiquidityEndsCancelled() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order marketBuy = new Order(
+                3601,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(
+                OrderStatus.CANCELLED,
+                marketBuy.getStatus()
+        );
+
+        assertEquals(0, marketBuy.getFilledQuantity());
+        assertEquals(5, marketBuy.getRemainingQuantity());
+
+        assertEquals(0, engine.getOpenOrderCount());
+    }
+
+    @Test
+    void fullyFilledMarketOrderEndsFilled() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(
+                new Order(
+                        3701,
+                        OrderSide.SELL,
+                        new BigDecimal("100"),
+                        5
+                )
+        );
+
+        Order marketBuy = new Order(
+                3702,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(
+                OrderStatus.FILLED,
+                marketBuy.getStatus()
+        );
+
+        assertEquals(5, marketBuy.getFilledQuantity());
+        assertEquals(0, marketBuy.getRemainingQuantity());
+
+        assertTrue(marketBuy.isFilled());
+        assertFalse(marketBuy.isCancelled());
+    }
 }
