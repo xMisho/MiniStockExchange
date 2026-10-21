@@ -23,6 +23,9 @@ public class OrderBook {
         if (order == null) {
             throw new IllegalArgumentException("Order must not be null.");
         }
+        if (order.getOrderType() != OrderType.LIMIT) {
+            throw new IllegalArgumentException("Only limit orders can rest in the order book.");
+        }
         NavigableMap<BigDecimal, Deque<Order>> orders =
                 order.getSide() == OrderSide.BUY ? buyOrders : sellOrders;
 

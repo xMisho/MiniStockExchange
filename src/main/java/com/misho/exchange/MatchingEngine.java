@@ -41,8 +41,12 @@ public class MatchingEngine {
             if (!usedOrderIds.add(order.getOrderId())) {
                 throw new IllegalArgumentException("Order ID has already been used.");
             }
-            orderBook.addOrder(order);
-            matchOrders(order);
+            if (order.getOrderType() == OrderType.MARKET) {
+                matchMarketOrder(order);
+            } else {
+                orderBook.addOrder(order);
+                matchOrders(order);
+            }
         } finally {
             lock.unlock();
         }
@@ -57,21 +61,55 @@ public class MatchingEngine {
             BigDecimal executionPrice = incomingOrder.getSide() == OrderSide.BUY
                     ? sell.getPrice()
                     : buy.getPrice();
-            Trade trade = new Trade(
-                    buy.getOrderId(),
-                    sell.getOrderId(),
-                    executionPrice,
-                    quantity
-            );
+            executeTrade(buy, sell, quantity, executionPrice);
 
-            buy.fill(quantity);
-            sell.fill(quantity);
-            tradeHistory.add(trade);
+            orderBook.removeFilledOrders();
+        }
+    }
 
-            if (stock != null) {
-                stock.updateLastTradedPrice(trade.getExecutionPrice());
+    private void executeTrade(Order buy, Order sell, int quantity,
+                              BigDecimal executionPrice) {
+        Trade trade = new Trade(
+                buy.getOrderId(),
+                sell.getOrderId(),
+                executionPrice,
+                quantity
+        );
+
+        buy.fill(quantity);
+        sell.fill(quantity);
+        tradeHistory.add(trade);
+
+        if (stock != null) {
+            stock.updateLastTradedPrice(trade.getExecutionPrice());
+        }
+    }
+
+    private void matchMarketOrder(Order marketOrder) {
+        orderBook.removeFilledOrders();
+
+        while (!marketOrder.isFilled()) {
+            Order restingOrder = marketOrder.getSide() == OrderSide.BUY
+                    ? orderBook.getBestSellOrder()
+                    : orderBook.getBestBuyOrder();
+
+            if (restingOrder == null) {
+                break;
             }
 
+            Order buy = marketOrder.getSide() == OrderSide.BUY
+                    ? marketOrder
+                    : restingOrder;
+            Order sell = marketOrder.getSide() == OrderSide.SELL
+                    ? marketOrder
+                    : restingOrder;
+            int quantity = Math.min(
+                    marketOrder.getRemainingQuantity(),
+                    restingOrder.getRemainingQuantity()
+            );
+            BigDecimal executionPrice = restingOrder.getPrice();
+
+            executeTrade(buy, sell, quantity, executionPrice);
             orderBook.removeFilledOrders();
         }
     }

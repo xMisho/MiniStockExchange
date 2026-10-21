@@ -1,6 +1,7 @@
 package com.misho.exchange;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1107,4 +1108,239 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
     assertEquals(1, exchange.getTradeCount("AAPL"));
     assertEquals(3, exchange.getTotalTradedVolume("AAPL"));
 }
+
+    @Test
+    void marketBuyConsumesLowestAsksAcrossPriceLevels() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order sellOne = new Order(
+                2001,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                2
+        );
+
+        Order sellTwo = new Order(
+                2002,
+                OrderSide.SELL,
+                new BigDecimal("101"),
+                3
+        );
+
+        engine.submitOrder(sellOne);
+        engine.submitOrder(sellTwo);
+
+        Order marketBuy = new Order(
+                2003,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                4
+        );
+
+        engine.submitOrder(marketBuy);
+
+        List<Trade> trades =
+                engine.getTradeHistory();
+
+        assertEquals(2, trades.size());
+
+        assertEquals(
+                new BigDecimal("100"),
+                trades.get(0).getExecutionPrice()
+        );
+        assertEquals(2, trades.get(0).getQuantity());
+
+        assertEquals(
+                new BigDecimal("101"),
+                trades.get(1).getExecutionPrice()
+        );
+        assertEquals(2, trades.get(1).getQuantity());
+
+        assertTrue(marketBuy.isFilled());
+
+        assertEquals(
+                1,
+                sellTwo.getRemainingQuantity()
+        );
+
+        assertEquals(
+                new BigDecimal("101"),
+                engine.getBestAskPrice()
+        );
+
+        assertEquals(1, engine.getOpenOrderCount());
+    }
+
+    @Test
+    void marketSellConsumesHighestBidsAcrossPriceLevels() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order buyOne = new Order(
+                2101,
+                OrderSide.BUY,
+                new BigDecimal("105"),
+                2
+        );
+
+        Order buyTwo = new Order(
+                2102,
+                OrderSide.BUY,
+                new BigDecimal("104"),
+                3
+        );
+
+        engine.submitOrder(buyOne);
+        engine.submitOrder(buyTwo);
+
+        Order marketSell = new Order(
+                2103,
+                OrderSide.SELL,
+                OrderType.MARKET,
+                null,
+                4
+        );
+
+        engine.submitOrder(marketSell);
+
+        List<Trade> trades =
+                engine.getTradeHistory();
+
+        assertEquals(2, trades.size());
+
+        assertEquals(
+                new BigDecimal("105"),
+                trades.get(0).getExecutionPrice()
+        );
+        assertEquals(2, trades.get(0).getQuantity());
+
+        assertEquals(
+                new BigDecimal("104"),
+                trades.get(1).getExecutionPrice()
+        );
+        assertEquals(2, trades.get(1).getQuantity());
+
+        assertTrue(marketSell.isFilled());
+
+        assertEquals(
+                1,
+                buyTwo.getRemainingQuantity()
+        );
+
+        assertEquals(
+                new BigDecimal("104"),
+                engine.getBestBidPrice()
+        );
+    }
+
+    @Test
+    void unfilledMarketOrderRemainderDoesNotRestInBook() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(
+                new Order(
+                        2201,
+                        OrderSide.SELL,
+                        new BigDecimal("100"),
+                        2
+                )
+        );
+
+        Order marketBuy = new Order(
+                2202,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(1, engine.getTradeCount());
+        assertEquals(3, marketBuy.getRemainingQuantity());
+
+        assertEquals(0, engine.getOpenOrderCount());
+
+        assertNull(engine.getBestBidPrice());
+        assertNull(engine.getBestAskPrice());
+
+        assertFalse(engine.cancelOrder(2202));
+    }
+
+    @Test
+    void marketOrderWithNoLiquidityExecutesNothing() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order marketBuy = new Order(
+                2301,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(0, engine.getTradeCount());
+        assertEquals(0, engine.getOpenOrderCount());
+        assertEquals(5, marketBuy.getRemainingQuantity());
+    }
+
+    @Test
+    void marketOrderUpdatesLastTradedPriceToFinalExecution() {
+        Exchange exchange = new Exchange();
+
+        exchange.registerStock(
+                new Stock(
+                        "AAPL",
+                        "Apple Inc.",
+                        new BigDecimal("250.00")
+                )
+        );
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        2401,
+                        OrderSide.SELL,
+                        new BigDecimal("100"),
+                        2
+                )
+        );
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        2402,
+                        OrderSide.SELL,
+                        new BigDecimal("101"),
+                        3
+                )
+        );
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        2403,
+                        OrderSide.BUY,
+                        OrderType.MARKET,
+                        null,
+                        5
+                )
+        );
+
+        assertEquals(2, exchange.getTradeCount("AAPL"));
+        assertEquals(5, exchange.getTotalTradedVolume("AAPL"));
+
+        assertEquals(
+                new BigDecimal("101"),
+                exchange.getLastTradedPrice("AAPL")
+        );
+
+        assertEquals(0, exchange.getOpenOrderCount("AAPL"));
+    }
 }
