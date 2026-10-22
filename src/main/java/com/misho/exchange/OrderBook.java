@@ -3,7 +3,7 @@ package com.misho.exchange;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -13,10 +13,12 @@ public class OrderBook {
 
     private final NavigableMap<BigDecimal, Deque<Order>> buyOrders;
     private final NavigableMap<BigDecimal, Deque<Order>> sellOrders;
+    private final Map<Long, Order> openOrdersById;
 
     public OrderBook() {
         this.buyOrders = new TreeMap<>(java.util.Collections.reverseOrder());
         this.sellOrders = new TreeMap<>();
+        this.openOrdersById = new HashMap<>();
     }
 
     public void addOrder(Order order) {
@@ -26,34 +28,19 @@ public class OrderBook {
         if (order.getOrderType() != OrderType.LIMIT) {
             throw new IllegalArgumentException("Only limit orders can rest in the order book.");
         }
+        if (openOrdersById.containsKey(order.getOrderId())) {
+            throw new IllegalArgumentException("Order ID is already open in this order book.");
+        }
         NavigableMap<BigDecimal, Deque<Order>> orders =
                 order.getSide() == OrderSide.BUY ? buyOrders : sellOrders;
 
         orders.computeIfAbsent(order.getPrice(), price -> new ArrayDeque<>())
                 .addLast(order);
+        openOrdersById.put(order.getOrderId(), order);
     }
 
     Order findOrder(long orderId) {
-        Order order = findOrder(buyOrders, orderId);
-
-        if (order != null) {
-            return order;
-        }
-
-        return findOrder(sellOrders, orderId);
-    }
-
-    private Order findOrder(NavigableMap<BigDecimal, Deque<Order>> orders,
-                            long orderId) {
-        for (Deque<Order> queue : orders.values()) {
-            for (Order order : queue) {
-                if (order.getOrderId() == orderId) {
-                    return order;
-                }
-            }
-        }
-
-        return null;
+        return openOrdersById.get(orderId);
     }
 
     Order amendOrder(
@@ -103,12 +90,17 @@ public class OrderBook {
         }
 
         boolean removed = queue.remove(order);
+        if (!removed) {
+            return false;
+        }
+
+        openOrdersById.remove(order.getOrderId(), order);
 
         if (queue.isEmpty()) {
             orders.remove(order.getPrice());
         }
 
-        return removed;
+        return true;
     }
 
     private Order getBestOrder(NavigableMap<BigDecimal, Deque<Order>> orders) {
@@ -135,7 +127,8 @@ public class OrderBook {
         while (!orders.isEmpty()) {
             Deque<Order> queue = orders.firstEntry().getValue();
             while (!queue.isEmpty() && queue.peekFirst().isFilled()) {
-                queue.removeFirst();
+                Order filledOrder = queue.removeFirst();
+                openOrdersById.remove(filledOrder.getOrderId(), filledOrder);
             }
             if (queue.isEmpty()) {
                 orders.pollFirstEntry();
@@ -146,34 +139,16 @@ public class OrderBook {
     }
 
     public boolean cancelOrder(long orderId) {
-        if (cancelOrder(buyOrders, orderId)) {
-            return true;
+        Order order = openOrdersById.get(orderId);
+        if (order == null) {
+            return false;
         }
-        return cancelOrder(sellOrders, orderId);
-    }
-
-    private boolean cancelOrder(NavigableMap<BigDecimal, Deque<Order>> orders,
-                                long orderId) {
-        Iterator<Map.Entry<BigDecimal, Deque<Order>>> priceIterator =
-                orders.entrySet().iterator();
-
-        while (priceIterator.hasNext()) {
-            Deque<Order> queue = priceIterator.next().getValue();
-            Iterator<Order> orderIterator = queue.iterator();
-
-            while (orderIterator.hasNext()) {
-                Order order = orderIterator.next();
-                if (order.getOrderId() == orderId) {
-                    order.cancel();
-                    orderIterator.remove();
-                    if (queue.isEmpty()) {
-                        priceIterator.remove();
-                    }
-                    return true;
-                }
-            }
+        if (!removeOrder(order)) {
+            return false;
         }
-        return false;
+
+        order.cancel();
+        return true;
     }
 
     public BigDecimal getBestBidPrice() {
@@ -204,7 +179,7 @@ public class OrderBook {
     }
 
     public int getOpenOrderCount() {
-        return getOrderCount(buyOrders) + getOrderCount(sellOrders);
+        return openOrdersById.size();
     }
 
     public int getBuyOrderCount() {

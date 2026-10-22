@@ -211,6 +211,15 @@ public class MatchingEngine {
         }
     }
 
+    public Order getOpenOrder(long orderId) {
+        lock.lock();
+        try {
+            return orderBook.findOrder(orderId);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public int getOpenOrderCount() {
         lock.lock();
         try {

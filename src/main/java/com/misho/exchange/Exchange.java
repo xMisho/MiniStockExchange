@@ -117,4 +117,7 @@ public List<Trade> getTradeHistory(String symbol) {
 
         return stock.getLastTradedPrice();
     }
+    public Order getOpenOrder(String symbol, long orderId) {
+        return getEngineOrThrow(symbol).getOpenOrder(orderId);
+    }
 }

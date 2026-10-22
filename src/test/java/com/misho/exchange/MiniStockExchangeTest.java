@@ -1598,4 +1598,233 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
         assertTrue(marketBuy.isFilled());
         assertFalse(marketBuy.isCancelled());
     }
+
+    @Test
+    void openOrderCanBeLookedUpById() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order order = new Order(
+                4001,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(order);
+
+        assertSame(
+                order,
+                engine.getOpenOrder(4001)
+        );
+
+        assertNull(
+                engine.getOpenOrder(9999)
+        );
+    }
+
+    @Test
+    void filledOrderIsRemovedFromOpenOrderIndex() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order sell = new Order(
+                4101,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                5
+        );
+
+        Order buy = new Order(
+                4102,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(sell);
+        engine.submitOrder(buy);
+
+        assertTrue(sell.isFilled());
+        assertTrue(buy.isFilled());
+
+        assertNull(engine.getOpenOrder(4101));
+        assertNull(engine.getOpenOrder(4102));
+
+        assertEquals(0, engine.getOpenOrderCount());
+    }
+
+    @Test
+    void cancelledOrderIsRemovedFromOpenOrderIndex() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order order = new Order(
+                4201,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(order);
+
+        assertSame(
+                order,
+                engine.getOpenOrder(4201)
+        );
+
+        assertTrue(engine.cancelOrder(4201));
+
+        assertNull(
+                engine.getOpenOrder(4201)
+        );
+
+        assertEquals(
+                OrderStatus.CANCELLED,
+                order.getStatus()
+        );
+    }
+
+    @Test
+    void amendedOrderRemainsAvailableInOpenOrderIndex() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order order = new Order(
+                4301,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        );
+
+        engine.submitOrder(order);
+
+        assertTrue(
+                engine.amendOrder(
+                        4301,
+                        new BigDecimal("101"),
+                        8
+                )
+        );
+
+        Order lookedUp =
+                engine.getOpenOrder(4301);
+
+        assertSame(order, lookedUp);
+
+        assertEquals(
+                new BigDecimal("101"),
+                lookedUp.getPrice()
+        );
+
+        assertEquals(
+                8,
+                lookedUp.getRemainingQuantity()
+        );
+
+        assertEquals(1, engine.getOpenOrderCount());
+    }
+
+    @Test
+    void marketOrdersNeverEnterOpenOrderIndex() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        Order marketBuy = new Order(
+                4401,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertNull(
+                engine.getOpenOrder(4401)
+        );
+
+        assertEquals(0, engine.getOpenOrderCount());
+
+        assertEquals(
+                OrderStatus.CANCELLED,
+                marketBuy.getStatus()
+        );
+    }
+
+    @Test
+    void openOrderLookupIsScopedByStock() {
+        Exchange exchange = new Exchange();
+
+        exchange.registerStock(
+                new Stock(
+                        "AAPL",
+                        "Apple Inc.",
+                        new BigDecimal("250")
+                )
+        );
+
+        exchange.registerStock(
+                new Stock(
+                        "NVDA",
+                        "NVIDIA Corp.",
+                        new BigDecimal("190")
+                )
+        );
+
+        Order appleOrder = new Order(
+                5001,
+                OrderSide.BUY,
+                new BigDecimal("200"),
+                5
+        );
+
+        Order nvidiaOrder = new Order(
+                5001,
+                OrderSide.SELL,
+                new BigDecimal("220"),
+                3
+        );
+
+        exchange.submitOrder("AAPL", appleOrder);
+        exchange.submitOrder("NVDA", nvidiaOrder);
+
+        assertSame(
+                appleOrder,
+                exchange.getOpenOrder("AAPL", 5001)
+        );
+
+        assertSame(
+                nvidiaOrder,
+                exchange.getOpenOrder("NVDA", 5001)
+        );
+    }
+
+    @Test
+    void orderBookRejectsDuplicateOpenOrderIds() {
+        OrderBook book = new OrderBook();
+
+        book.addOrder(
+                new Order(
+                        5101,
+                        OrderSide.BUY,
+                        new BigDecimal("100"),
+                        5
+                )
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> book.addOrder(
+                        new Order(
+                                5101,
+                                OrderSide.SELL,
+                                new BigDecimal("110"),
+                                5
+                        )
+                )
+        );
+
+        assertEquals(1, book.getOpenOrderCount());
+    }
 }
