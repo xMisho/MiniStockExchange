@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 
 
 
@@ -119,5 +120,13 @@ public List<Trade> getTradeHistory(String symbol) {
     }
     public Order getOpenOrder(String symbol, long orderId) {
         return getEngineOrThrow(symbol).getOpenOrder(orderId);
+    }
+
+    public NavigableMap<BigDecimal, Long> getBuyDepth(String symbol) {
+        return getEngineOrThrow(symbol).getBuyDepth();
+    }
+
+    public NavigableMap<BigDecimal, Long> getSellDepth(String symbol) {
+        return getEngineOrThrow(symbol).getSellDepth();
     }
 }

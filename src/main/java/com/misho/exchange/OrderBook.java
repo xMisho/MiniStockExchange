@@ -2,6 +2,7 @@ package com.misho.exchange;
 
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
@@ -188,6 +189,30 @@ public class OrderBook {
 
     public int getSellOrderCount() {
         return getOrderCount(sellOrders);
+    }
+
+    private NavigableMap<BigDecimal, Long> buildDepth(
+            NavigableMap<BigDecimal, Deque<Order>> orders) {
+        NavigableMap<BigDecimal, Long> depth = new TreeMap<>(orders.comparator());
+
+        for (Map.Entry<BigDecimal, Deque<Order>> entry : orders.entrySet()) {
+            long totalQuantity = 0;
+            for (Order order : entry.getValue()) {
+                totalQuantity += order.getRemainingQuantity();
+            }
+            if (totalQuantity > 0) {
+                depth.put(entry.getKey(), totalQuantity);
+            }
+        }
+        return Collections.unmodifiableNavigableMap(depth);
+    }
+
+    public NavigableMap<BigDecimal, Long> getBuyDepth() {
+        return buildDepth(buyOrders);
+    }
+
+    public NavigableMap<BigDecimal, Long> getSellDepth() {
+        return buildDepth(sellOrders);
     }
 
     public boolean canMatch() {

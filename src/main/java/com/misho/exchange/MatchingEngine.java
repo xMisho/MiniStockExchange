@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -161,6 +162,24 @@ public class MatchingEngine {
         lock.lock();
         try {
             return tradeHistory.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public NavigableMap<BigDecimal, Long> getBuyDepth() {
+        lock.lock();
+        try {
+            return orderBook.getBuyDepth();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public NavigableMap<BigDecimal, Long> getSellDepth() {
+        lock.lock();
+        try {
+            return orderBook.getSellDepth();
         } finally {
             lock.unlock();
         }

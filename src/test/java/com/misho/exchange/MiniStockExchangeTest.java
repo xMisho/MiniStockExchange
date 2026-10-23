@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.NavigableMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import java.util.concurrent.CountDownLatch;
@@ -1826,5 +1827,189 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
         );
 
         assertEquals(1, book.getOpenOrderCount());
+    }
+
+    @Test
+    void marketDepthAggregatesQuantityByPriceLevel() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                6001,
+                OrderSide.BUY,
+                new BigDecimal("101"),
+                3
+        ));
+
+        engine.submitOrder(new Order(
+                6002,
+                OrderSide.BUY,
+                new BigDecimal("101"),
+                2
+        ));
+
+        engine.submitOrder(new Order(
+                6003,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                7
+        ));
+
+        engine.submitOrder(new Order(
+                6004,
+                OrderSide.SELL,
+                new BigDecimal("102"),
+                4
+        ));
+
+        engine.submitOrder(new Order(
+                6005,
+                OrderSide.SELL,
+                new BigDecimal("103"),
+                6
+        ));
+
+        NavigableMap<BigDecimal, Long> buyDepth =
+                engine.getBuyDepth();
+
+        NavigableMap<BigDecimal, Long> sellDepth =
+                engine.getSellDepth();
+
+        assertEquals(2, buyDepth.size());
+        assertEquals(5L, buyDepth.get(new BigDecimal("101")));
+        assertEquals(7L, buyDepth.get(new BigDecimal("100")));
+
+        assertEquals(
+                List.of(
+                        new BigDecimal("101"),
+                        new BigDecimal("100")
+                ),
+                List.copyOf(buyDepth.keySet())
+        );
+
+        assertEquals(2, sellDepth.size());
+        assertEquals(4L, sellDepth.get(new BigDecimal("102")));
+        assertEquals(6L, sellDepth.get(new BigDecimal("103")));
+
+        assertEquals(
+                List.of(
+                        new BigDecimal("102"),
+                        new BigDecimal("103")
+                ),
+                List.copyOf(sellDepth.keySet())
+        );
+    }
+
+    @Test
+    void marketDepthReflectsRemainingQuantityAfterTrade() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                6101,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                10
+        ));
+
+        engine.submitOrder(new Order(
+                6102,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                4
+        ));
+
+        NavigableMap<BigDecimal, Long> sellDepth =
+                engine.getSellDepth();
+
+        assertEquals(1, sellDepth.size());
+
+        assertEquals(
+                6L,
+                sellDepth.get(new BigDecimal("100"))
+        );
+
+        assertTrue(engine.getBuyDepth().isEmpty());
+    }
+
+    @Test
+    void marketDepthReflectsCancellationAndAmendment() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                6201,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        ));
+
+        engine.submitOrder(new Order(
+                6202,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                3
+        ));
+
+        assertEquals(
+                8L,
+                engine.getBuyDepth().get(new BigDecimal("100"))
+        );
+
+        engine.cancelOrder(6202);
+
+        assertEquals(
+                5L,
+                engine.getBuyDepth().get(new BigDecimal("100"))
+        );
+
+        engine.amendOrder(
+                6201,
+                new BigDecimal("99"),
+                7
+        );
+
+        assertFalse(
+                engine.getBuyDepth().containsKey(
+                        new BigDecimal("100")
+                )
+        );
+
+        assertEquals(
+                7L,
+                engine.getBuyDepth().get(
+                        new BigDecimal("99")
+                )
+        );
+    }
+
+    @Test
+    void marketDepthSnapshotsAreUnmodifiable() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                6301,
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                5
+        ));
+
+        NavigableMap<BigDecimal, Long> depth =
+                engine.getBuyDepth();
+
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> depth.put(
+                        new BigDecimal("999"),
+                        999L
+                )
+        );
+
+        assertNull(
+                engine.getBuyDepth().get(
+                        new BigDecimal("999")
+                )
+        );
     }
 }
