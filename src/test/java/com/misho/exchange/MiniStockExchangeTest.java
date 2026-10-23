@@ -2012,4 +2012,170 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
                 )
         );
     }
+
+    @Test
+    void marketAnalyticsAreEmptyBeforeAnyTrades() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        assertEquals(0, engine.getTradeCount());
+        assertEquals(0, engine.getTotalTradedVolume());
+
+        assertNull(engine.getVwap());
+        assertNull(engine.getAverageTradeSize());
+    }
+
+    @Test
+    void calculatesVwapAcrossMultipleExecutions() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                7001,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                2
+        ));
+
+        engine.submitOrder(new Order(
+                7002,
+                OrderSide.SELL,
+                new BigDecimal("102"),
+                3
+        ));
+
+        Order marketBuy = new Order(
+                7003,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                5
+        );
+
+        engine.submitOrder(marketBuy);
+
+        assertEquals(2, engine.getTradeCount());
+        assertEquals(5, engine.getTotalTradedVolume());
+
+        assertEquals(
+                new BigDecimal("101.2000"),
+                engine.getVwap()
+        );
+
+        assertEquals(
+                new BigDecimal("2.50"),
+                engine.getAverageTradeSize()
+        );
+    }
+
+    @Test
+    void vwapWeightsPricesByExecutedQuantity() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                7101,
+                OrderSide.SELL,
+                new BigDecimal("100"),
+                9
+        ));
+
+        engine.submitOrder(new Order(
+                7102,
+                OrderSide.SELL,
+                new BigDecimal("110"),
+                1
+        ));
+
+        engine.submitOrder(new Order(
+                7103,
+                OrderSide.BUY,
+                OrderType.MARKET,
+                null,
+                10
+        ));
+
+        assertEquals(10, engine.getTotalTradedVolume());
+
+        assertEquals(
+                new BigDecimal("101.0000"),
+                engine.getVwap()
+        );
+    }
+
+    @Test
+    void marketAnalyticsAreIndependentPerStock() {
+        Exchange exchange = new Exchange();
+
+        exchange.registerStock(new Stock(
+                "AAPL",
+                "Apple Inc.",
+                new BigDecimal("250")
+        ));
+
+        exchange.registerStock(new Stock(
+                "NVDA",
+                "NVIDIA Corp.",
+                new BigDecimal("190")
+        ));
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        7201,
+                        OrderSide.SELL,
+                        new BigDecimal("100"),
+                        5
+                )
+        );
+
+        exchange.submitOrder(
+                "AAPL",
+                new Order(
+                        7202,
+                        OrderSide.BUY,
+                        new BigDecimal("100"),
+                        5
+                )
+        );
+
+        assertEquals(1, exchange.getTradeCount("AAPL"));
+        assertEquals(5, exchange.getTotalTradedVolume("AAPL"));
+
+        assertEquals(
+                new BigDecimal("100.0000"),
+                exchange.getVwap("AAPL")
+        );
+
+        assertEquals(0, exchange.getTradeCount("NVDA"));
+        assertEquals(0, exchange.getTotalTradedVolume("NVDA"));
+        assertNull(exchange.getVwap("NVDA"));
+    }
+
+    @Test
+    void cancellationsAndNonCrossingOrdersDoNotAffectAnalytics() {
+        MatchingEngine engine =
+                new MatchingEngine(new OrderBook());
+
+        engine.submitOrder(new Order(
+                7301,
+                OrderSide.BUY,
+                new BigDecimal("90"),
+                5
+        ));
+
+        engine.submitOrder(new Order(
+                7302,
+                OrderSide.SELL,
+                new BigDecimal("110"),
+                5
+        ));
+
+        engine.cancelOrder(7301);
+
+        assertEquals(0, engine.getTradeCount());
+        assertEquals(0, engine.getTotalTradedVolume());
+        assertNull(engine.getVwap());
+        assertNull(engine.getAverageTradeSize());
+    }
 }

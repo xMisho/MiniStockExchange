@@ -129,4 +129,12 @@ public List<Trade> getTradeHistory(String symbol) {
     public NavigableMap<BigDecimal, Long> getSellDepth(String symbol) {
         return getEngineOrThrow(symbol).getSellDepth();
     }
+
+    public BigDecimal getVwap(String symbol) {
+        return getEngineOrThrow(symbol).getVwap();
+    }
+
+    public BigDecimal getAverageTradeSize(String symbol) {
+        return getEngineOrThrow(symbol).getAverageTradeSize();
+    }
 }

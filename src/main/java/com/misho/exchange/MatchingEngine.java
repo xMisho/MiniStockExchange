@@ -1,6 +1,7 @@
 package com.misho.exchange;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,6 +17,8 @@ public class MatchingEngine {
     private final List<Trade> tradeHistory;
     private final Set<Long> usedOrderIds;
     private final ReentrantLock lock;
+    private long totalTradedVolume;
+    private BigDecimal totalTradedNotional;
     
 
     public MatchingEngine(OrderBook orderBook) {
@@ -31,6 +34,8 @@ public class MatchingEngine {
         this.tradeHistory = new ArrayList<>();
         this.usedOrderIds = new HashSet<>();
         this.lock = new ReentrantLock();
+        this.totalTradedVolume = 0;
+        this.totalTradedNotional = BigDecimal.ZERO;
     }
 
     public void submitOrder(Order order) {
@@ -80,6 +85,10 @@ public class MatchingEngine {
         buy.fill(quantity);
         sell.fill(quantity);
         tradeHistory.add(trade);
+        totalTradedVolume += quantity;
+        totalTradedNotional = totalTradedNotional.add(
+                executionPrice.multiply(BigDecimal.valueOf(quantity))
+        );
 
         if (stock != null) {
             stock.updateLastTradedPrice(trade.getExecutionPrice());
@@ -248,14 +257,42 @@ public class MatchingEngine {
         }
     }
 
+    public BigDecimal getVwap() {
+        lock.lock();
+        try {
+            if (totalTradedVolume == 0) {
+                return null;
+            }
+            return totalTradedNotional.divide(
+                    BigDecimal.valueOf(totalTradedVolume),
+                    4,
+                    RoundingMode.HALF_UP
+            );
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public BigDecimal getAverageTradeSize() {
+        lock.lock();
+        try {
+            if (tradeHistory.isEmpty()) {
+                return null;
+            }
+            return BigDecimal.valueOf(totalTradedVolume).divide(
+                    BigDecimal.valueOf(tradeHistory.size()),
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public long getTotalTradedVolume() {
         lock.lock();
         try {
-            long volume = 0;
-            for (Trade trade : tradeHistory) {
-                volume += trade.getQuantity();
-            }
-            return volume;
+            return totalTradedVolume;
         } finally {
             lock.unlock();
         }
