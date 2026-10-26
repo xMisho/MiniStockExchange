@@ -11,6 +11,10 @@ public final class Trade {
     private final long timestamp;
 
     public Trade(long buyOrderId, long sellOrderId, BigDecimal executionPrice, int quantity) {
+        this(buyOrderId, sellOrderId, executionPrice, quantity, System.currentTimeMillis());
+    }
+
+    Trade(long buyOrderId, long sellOrderId, BigDecimal executionPrice, int quantity, long timestamp) {
         if (buyOrderId <= 0 || sellOrderId <= 0) {
             throw new IllegalArgumentException("Order IDs must be positive.");
         }
@@ -28,7 +32,7 @@ public final class Trade {
         this.sellOrderId = sellOrderId;
         this.executionPrice = executionPrice;
         this.quantity = quantity;
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = timestamp;
     }
 
     public long getBuyOrderId() {

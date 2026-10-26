@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-/** Stores open orders; concurrent access must go through its owning MatchingEngine. */
+
 public class OrderBook {
 
     private final NavigableMap<BigDecimal, Deque<Order>> buyOrders;

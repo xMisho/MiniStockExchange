@@ -137,4 +137,12 @@ public List<Trade> getTradeHistory(String symbol) {
     public BigDecimal getAverageTradeSize(String symbol) {
         return getEngineOrThrow(symbol).getAverageTradeSize();
     }
+
+    public NavigableMap<Long, OhlcCandle> getOhlcCandles(String symbol) {
+        return getEngineOrThrow(symbol).getOhlcCandles();
+    }
+
+    public OhlcCandle getLatestOhlcCandle(String symbol) {
+        return getEngineOrThrow(symbol).getLatestOhlcCandle();
+    }
 }

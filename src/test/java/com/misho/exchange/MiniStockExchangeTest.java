@@ -355,6 +355,14 @@ class MiniStockExchangeTest {
                     engine.getTradeHistory();
                     engine.getTradeCount();
                     engine.getTotalTradedVolume();
+                    OhlcCandle candle = engine.getLatestOhlcCandle();
+                    if (candle != null) {
+                        assertTrue(candle.getLow().compareTo(candle.getOpen()) <= 0);
+                        assertTrue(candle.getHigh().compareTo(candle.getOpen()) >= 0);
+                        assertTrue(candle.getLow().compareTo(candle.getClose()) <= 0);
+                        assertTrue(candle.getHigh().compareTo(candle.getClose()) >= 0);
+                    }
+                    engine.getOhlcCandles();
                 }
             } catch (Throwable t) {
                 failure.compareAndSet(null, t);
@@ -2178,4 +2186,5 @@ void amendmentTriggeredTradeUpdatesLastTradedPrice() {
         assertNull(engine.getVwap());
         assertNull(engine.getAverageTradeSize());
     }
+
 }

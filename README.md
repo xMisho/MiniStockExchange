@@ -7,7 +7,7 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 ## Features
 
 - Highest bid and lowest ask are matched whenever their prices cross.
-- FIFO queues preserve book insertion order among orders at the same price. Concurrent submissions are ordered by acquisition of the engine lock, not by their creation timestamps.
+- FIFO queues preserve book insertion order among orders at the same price. Concurrent submissions are ordered by acquisition of the engine monitor, not by their creation timestamps.
 - Partial fills leave the unfilled quantity in the book.
 - Each match records an immutable trade at the resting order’s limit price.
 - Cancellation removes an open order and cleans up empty price levels.
@@ -15,9 +15,11 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 - Book statistics expose best bid, best ask, spread, and open-order counts. A missing side has a `null` best price; spread is `null` unless both sides exist.
 - Trade statistics expose trade count and total executed quantity (shares, not monetary turnover). `getTradeHistory()` returns an unmodifiable snapshot.
 
+- One-minute OHLC candles per stock, with immutable snapshots. See [OHLC behavior and API](docs/ohlc.md).
+
 ## Technical concepts
 
-`TreeMap`, `NavigableMap`, `ArrayDeque`, `BigDecimal`, `HashSet`, `ReentrantLock`, `CountDownLatch`, and immutable snapshots.
+`TreeMap`, `NavigableMap`, `ArrayDeque`, `BigDecimal`, `HashSet`, `synchronized`, `CountDownLatch`, and immutable snapshots.
 
 ## Architecture
 
@@ -99,7 +101,7 @@ Use one engine per initially empty book. Concurrent callers must interact throug
 
 ## What this project taught me
 
-Price priority and time priority are separate concerns: the sorted maps select a price, while each deque selects the oldest order there. Matching must update quantities, record executions, and clean the book as one operation. A single engine lock keeps that sequence easy to reason about.
+Price priority and time priority are separate concerns: the sorted maps select a price, while each deque selects the oldest order there. Matching must update quantities, record executions, and clean the book as one operation. A single engine monitor, acquired by synchronized methods, keeps that sequence easy to reason about.
 
 ## Project history
 
