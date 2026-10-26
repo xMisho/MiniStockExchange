@@ -161,4 +161,9 @@ public List<Trade> getTradeHistory(String symbol) {
         }
         return stock.getPriceChangePercent();
     }
+
+    Order submitGeneratedOrder(String symbol, OrderSide side, OrderType type,
+                               BigDecimal price, int quantity) {
+        return getEngineOrThrow(symbol).submitGeneratedOrder(side, type, price, quantity);
+    }
 }

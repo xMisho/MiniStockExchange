@@ -1,6 +1,6 @@
 # MiniStockExchange
 
-A Java limit-order-book simulation with price-time priority, partial fills, trade history, order cancellation, and serialized concurrent access.
+A Java multi-stock limit-order-book simulation with price-time priority, partial fills, trade history, order cancellation, and serialized concurrent access.
 
 Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
@@ -19,6 +19,8 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
 - Price change and percentage change from each stock’s reference price. See [price change statistics](docs/price-change.md).
 
+- A seeded live market simulator with start/stop controls, bounded resting orders, and a demo launcher. See [simulator usage](docs/market-simulator.md).
+
 ## Technical concepts
 
 `TreeMap`, `NavigableMap`, `ArrayDeque`, `BigDecimal`, `HashSet`, `synchronized`, `CountDownLatch`, and immutable snapshots.
@@ -27,26 +29,43 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
 | Class | Responsibility |
 | --- | --- |
-| `Order` | Validated limit order and remaining quantity |
+| `Order` | Validated limit/market order, amendments, fill quantities, and lifecycle status |
 | `OrderSide` | BUY / SELL enum |
 | `OrderBook` | Price levels, FIFO queues, cancellation, and book statistics |
 | `Trade` | Immutable execution record |
-| `MatchingEngine` | Submission, matching, ID uniqueness, history, and concurrency boundary |
+| `MatchingEngine` | Submission, matching, ID uniqueness, history, analytics, and concurrency boundary |
+| `Exchange` / `Stock` | Symbol routing and stock metadata / price statistics |
+| `OrderType` / `OrderStatus` | Limit/market type and lifecycle enums |
+| `OhlcCandle` | Immutable one-minute execution-price snapshot |
+| `MarketSimulator` | Seeded generation, scheduling, and limits on its own open orders |
+| `Main` | Short simulator demo and final statistics |
 
 ```text
 MiniStockExchange/
 ├── README.md
 ├── .gitignore
 ├── pom.xml
+├── docs/
 └── src/
     ├── main/java/com/misho/exchange/
+    │   ├── Exchange.java
+    │   ├── Main.java
+    │   ├── MarketSimulator.java
     │   ├── MatchingEngine.java
+    │   ├── OhlcCandle.java
     │   ├── Order.java
     │   ├── OrderBook.java
     │   ├── OrderSide.java
+    │   ├── OrderStatus.java
+    │   ├── OrderType.java
+    │   ├── Stock.java
     │   └── Trade.java
     └── test/java/com/misho/exchange/
-        └── MiniStockExchangeTest.java
+        ├── MarketSimulatorTest.java
+        ├── MatchingEngineConcurrencyTest.java
+        ├── MiniStockExchangeTest.java
+        ├── OhlcTest.java
+        └── PriceChangeTest.java
 ```
 
 ## Build and run
@@ -65,7 +84,15 @@ Build and verify the library JAR:
 mvn clean verify
 ```
 
-The artifact is written to `target/mini-stock-exchange-1.0.0-SNAPSHOT.jar`. These classes are a library and test suite, so the JAR has no application entry point. Run the JUnit class from an IDE, or run a single suite with:
+The artifact is written to `target/mini-stock-exchange-1.0.0-SNAPSHOT.jar`.
+The JAR has no executable manifest; run the simulator launcher by class name:
+
+```bash
+java -cp target/mini-stock-exchange-1.0.0-SNAPSHOT.jar com.misho.exchange.Main 10 100 42
+```
+
+See [simulator usage](docs/market-simulator.md) for arguments and lifecycle details.
+Run a JUnit class from an IDE, or run a single suite with:
 
 ```bash
 mvn -Dtest=MiniStockExchangeTest test
@@ -73,7 +100,7 @@ mvn -Dtest=MiniStockExchangeTest test
 
 ## Testing
 
-Nine JUnit tests cover trade recording, cancellation, market statistics, duplicate IDs, FIFO priority, partial fills, resting-order execution prices in both directions, cancellation at a non-best price, and concurrent matching.
+JUnit tests cover trade recording, cancellation, market statistics, duplicate IDs, FIFO priority, partial fills, resting-order execution prices in both directions, cancellation at a non-best price, and concurrent matching.
 
 The stress test starts two buyers, two sellers, and one statistics reader together. Each submitting thread creates 1,000 quantity-one orders. Worker failures are propagated to the test. Expected final result: **2,000 trades, volume 2,000, zero open orders**.
 
@@ -97,7 +124,7 @@ System.out.println(engine.getOpenOrderCount()); // 1: BUY has 6 remaining
 
 ## Scope and limitations
 
-This is a single-instrument, in-memory learning project. It has no persistence, market orders, network API, fees, account balances, or real exchange connectivity. Cancellation scans the book rather than using an ID index.
+This is a multi-stock, in-memory learning project. It has no persistence, network API, fees, account balances, or real exchange connectivity. Open-order lookup uses an ID index; removal still scans the selected price queue.
 
 Use one engine per initially empty book. Concurrent callers must interact through the engine; do not mutate submitted orders or read/change its book directly. Separate statistics calls each acquire the lock independently and are not a combined snapshot. IDs and trade history are retained for the lifetime of that engine instance.
 

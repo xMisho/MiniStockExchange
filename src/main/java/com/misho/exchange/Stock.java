@@ -50,13 +50,11 @@ public BigDecimal getLastTradedPrice() {
     return lastTradedPrice;
 }
 
-    /** Signed difference from the reference price, or null before the first trade. */
     public BigDecimal getPriceChange() {
         BigDecimal lastPrice = lastTradedPrice;
         return lastPrice == null ? null : lastPrice.subtract(referencePrice);
     }
 
-    /** Signed percentage change, rounded HALF_UP to four decimals; null before any trade. */
     public BigDecimal getPriceChangePercent() {
         BigDecimal lastPrice = lastTradedPrice;
         if (lastPrice == null) {

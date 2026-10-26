@@ -20,6 +20,7 @@ public class MatchingEngine {
     private final Stock stock;
     private final List<Trade> tradeHistory;
     private final Set<Long> usedOrderIds;
+    private long nextGeneratedOrderId = 1;
     private long totalTradedVolume;
     private BigDecimal totalTradedNotional;
     private final Clock clock;
@@ -64,6 +65,22 @@ public class MatchingEngine {
             orderBook.addOrder(order);
             matchOrders(order);
         }
+    }
+
+    synchronized Order submitGeneratedOrder(OrderSide side, OrderType type,
+                                            BigDecimal price, int quantity) {
+        while (usedOrderIds.contains(nextGeneratedOrderId)) {
+            if (nextGeneratedOrderId == Long.MAX_VALUE) {
+                throw new IllegalStateException("No generated order IDs remain.");
+            }
+            nextGeneratedOrderId++;
+        }
+        Order order = new Order(nextGeneratedOrderId, side, type, price, quantity);
+        submitOrder(order);
+        if (nextGeneratedOrderId < Long.MAX_VALUE) {
+            nextGeneratedOrderId++;
+        }
+        return order;
     }
 
     private void matchOrders(Order incomingOrder) {

@@ -375,7 +375,6 @@ class MiniStockExchangeTest {
         seller2.start();
         reader.start();
 
-        // Release everybody at roughly the same time.
         startGate.countDown();
 
         buyer1.join();
@@ -981,7 +980,6 @@ void lastTradedPricesUpdateIndependentlyPerStock() {
             new BigDecimal("190.00")
     ));
 
-    // First AAPL trade executes at the resting SELL price: 251
     exchange.submitOrder(
             "AAPL",
             new Order(
@@ -1009,7 +1007,6 @@ void lastTradedPricesUpdateIndependentlyPerStock() {
 
     assertNull(exchange.getLastTradedPrice("NVDA"));
 
-    // Second AAPL trade becomes the new last traded price
     exchange.submitOrder(
             "AAPL",
             new Order(
@@ -1035,7 +1032,6 @@ void lastTradedPricesUpdateIndependentlyPerStock() {
             exchange.getLastTradedPrice("AAPL")
     );
 
-    // NVDA now trades independently
     exchange.submitOrder(
             "NVDA",
             new Order(
@@ -1061,7 +1057,6 @@ void lastTradedPricesUpdateIndependentlyPerStock() {
             exchange.getLastTradedPrice("NVDA")
     );
 
-    // NVDA trading must not change AAPL's price
     assertEquals(
             new BigDecimal("253"),
             exchange.getLastTradedPrice("AAPL")
