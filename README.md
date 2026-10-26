@@ -17,6 +17,8 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
 - One-minute OHLC candles per stock, with immutable snapshots. See [OHLC behavior and API](docs/ohlc.md).
 
+- Price change and percentage change from each stock’s reference price. See [price change statistics](docs/price-change.md).
+
 ## Technical concepts
 
 `TreeMap`, `NavigableMap`, `ArrayDeque`, `BigDecimal`, `HashSet`, `synchronized`, `CountDownLatch`, and immutable snapshots.

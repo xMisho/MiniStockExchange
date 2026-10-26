@@ -145,4 +145,20 @@ public List<Trade> getTradeHistory(String symbol) {
     public OhlcCandle getLatestOhlcCandle(String symbol) {
         return getEngineOrThrow(symbol).getLatestOhlcCandle();
     }
+
+    public BigDecimal getPriceChange(String symbol) {
+        Stock stock = getStock(symbol);
+        if (stock == null) {
+            throw new IllegalArgumentException("Stock is not registered.");
+        }
+        return stock.getPriceChange();
+    }
+
+    public BigDecimal getPriceChangePercent(String symbol) {
+        Stock stock = getStock(symbol);
+        if (stock == null) {
+            throw new IllegalArgumentException("Stock is not registered.");
+        }
+        return stock.getPriceChangePercent();
+    }
 }

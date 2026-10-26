@@ -1,6 +1,7 @@
 package com.misho.exchange;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class Stock {
 
@@ -48,6 +49,23 @@ public BigDecimal getReferencePrice() {
 public BigDecimal getLastTradedPrice() {
     return lastTradedPrice;
 }
+
+    /** Signed difference from the reference price, or null before the first trade. */
+    public BigDecimal getPriceChange() {
+        BigDecimal lastPrice = lastTradedPrice;
+        return lastPrice == null ? null : lastPrice.subtract(referencePrice);
+    }
+
+    /** Signed percentage change, rounded HALF_UP to four decimals; null before any trade. */
+    public BigDecimal getPriceChangePercent() {
+        BigDecimal lastPrice = lastTradedPrice;
+        if (lastPrice == null) {
+            return null;
+        }
+        return lastPrice.subtract(referencePrice)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(referencePrice, 4, RoundingMode.HALF_UP);
+    }
 
 void updateLastTradedPrice(BigDecimal executionPrice) {
     if (executionPrice == null ||
