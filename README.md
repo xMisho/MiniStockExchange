@@ -1,8 +1,8 @@
 # MiniStockExchange
 
-A Java multi-stock exchange simulation with price-time priority, limit and market orders, order amendments, trading analytics, and a live console dashboard.
+A concurrent Java multi-stock exchange simulator with price-time priority, limit and market orders, order amendments, trading analytics, and a live console dashboard.
 
-Java 17+ · Maven · JUnit 5 · No runtime dependencies
+Java 17+ · Maven · JUnit 5 · Concurrent matching · 12 V2 features · No runtime dependencies
 
 ## Core matching behavior
 
@@ -26,6 +26,8 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | 10 | Price change statistics | Signed absolute and percentage changes from each stock’s fixed reference price. |
 | 11 | Live market simulator | Seeded generation of BUY/SELL and LIMIT/MARKET orders, configurable speed and quantity, lifecycle controls, and limits on its own open orders. |
 | 12 | Live console dashboard | Refreshing stock summaries, optional colors, selected-stock OHLC, top three bid/ask levels, and consistent snapshots per stock. |
+
+![Live console dashboard showing simulated AAPL and TSLA prices, trading statistics, one-minute OHLC, and market depth](assets/dashboard.png)
 
 ## Technical concepts
 
@@ -53,6 +55,8 @@ MiniStockExchange/
 ├── README.md
 ├── .gitignore
 ├── pom.xml
+├── assets/
+│   └── dashboard.png
 └── src/
     ├── main/java/com/misho/exchange/
     │   ├── ConsoleDashboard.java
@@ -171,7 +175,7 @@ System.out.println(snapshot.latestCandle());
 
 ## Analytics and market data
 
-- **VWAP:** total execution price × quantity divided by total executed quantity, rounded to four decimals with HALF_UP. Average trade size rounds to two decimals. Both are `null` before any trade; executed volume counts shares, not monetary turnover.
+- **VWAP:** the sum of execution price × executed quantity, divided by total executed quantity, rounded to four decimals with HALF_UP. Average trade size rounds to two decimals. Both are `null` before any trade; executed volume counts shares, not monetary turnover.
 - **Price change:** last traded price minus reference price. Percentage change is that difference × 100 / reference price, rounded to four decimals with HALF_UP. Both are `null` before trading and signed afterward. This is not a daily change unless the reference price was chosen as the previous day’s close; there is no daily reset.
 - **OHLC:** open is the first execution in a minute, high/low are its maximum/minimum execution prices, and close is its latest execution price. Minute buckets include their start and exclude their end. Idle minutes create no candles. The latest candle may still be changing or may belong to an earlier minute. Reference prices and non-trading actions do not create candles.
 - **Snapshots:** depth maps, candle history, and trade-history lists are unmodifiable snapshots. Previously returned candles do not change after later executions. Best prices are `null` when that side is empty, and spread is `null` unless both sides exist.
