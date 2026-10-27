@@ -21,6 +21,8 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 
 - A seeded live market simulator with start/stop controls, bounded resting orders, and a demo launcher. See [simulator usage](docs/market-simulator.md).
 
+- A live console dashboard refreshes per-stock snapshots once per second and leaves final results visible. See [dashboard usage](docs/console-dashboard.md).
+
 ## Technical concepts
 
 `TreeMap`, `NavigableMap`, `ArrayDeque`, `BigDecimal`, `HashSet`, `synchronized`, `CountDownLatch`, and immutable snapshots.
@@ -38,7 +40,9 @@ Java 17+ · Maven · JUnit 5 · No runtime dependencies
 | `OrderType` / `OrderStatus` | Limit/market type and lifecycle enums |
 | `OhlcCandle` | Immutable one-minute execution-price snapshot |
 | `MarketSimulator` | Seeded generation, scheduling, and limits on its own open orders |
-| `Main` | Short simulator demo and final statistics |
+| `MarketSnapshot` | Immutable per-stock statistics captured under the engine monitor |
+| `ConsoleDashboard` | Live console rendering with plain-output fallback |
+| `Main` | Simulator and dashboard launcher |
 
 ```text
 MiniStockExchange/
@@ -48,9 +52,11 @@ MiniStockExchange/
 ├── docs/
 └── src/
     ├── main/java/com/misho/exchange/
+    │   ├── ConsoleDashboard.java
     │   ├── Exchange.java
     │   ├── Main.java
     │   ├── MarketSimulator.java
+    │   ├── MarketSnapshot.java
     │   ├── MatchingEngine.java
     │   ├── OhlcCandle.java
     │   ├── Order.java
@@ -61,6 +67,8 @@ MiniStockExchange/
     │   ├── Stock.java
     │   └── Trade.java
     └── test/java/com/misho/exchange/
+        ├── ConsoleDashboardTest.java
+        ├── SubmissionValidationTest.java
         ├── MarketSimulatorTest.java
         ├── MatchingEngineConcurrencyTest.java
         ├── MiniStockExchangeTest.java
@@ -126,7 +134,7 @@ System.out.println(engine.getOpenOrderCount()); // 1: BUY has 6 remaining
 
 This is a multi-stock, in-memory learning project. It has no persistence, network API, fees, account balances, or real exchange connectivity. Open-order lookup uses an ID index; removal still scans the selected price queue.
 
-Use one engine per initially empty book. Concurrent callers must interact through the engine; do not mutate submitted orders or read/change its book directly. Separate statistics calls each acquire the lock independently and are not a combined snapshot. IDs and trade history are retained for the lifetime of that engine instance.
+Use one engine per initially empty book. Concurrent callers must interact through the engine; do not mutate submitted orders or read/change its book directly. Separate statistics calls each acquire the monitor independently. `getMarketSnapshot(symbol)` captures one consistent row under that stock’s engine monitor; rows for different stocks are captured separately. IDs and trade history are retained for the lifetime of that engine instance.
 
 ## What this project taught me
 

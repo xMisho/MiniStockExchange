@@ -2,6 +2,7 @@ package com.misho.exchange;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Locale;
 
 public class Stock {
 
@@ -10,45 +11,38 @@ public class Stock {
     private final BigDecimal referencePrice;
     private volatile BigDecimal lastTradedPrice;
 
-    public Stock(
-        String symbol,
-        String companyName,
-        BigDecimal referencePrice) {
+    public Stock(String symbol, String companyName, BigDecimal referencePrice) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("Stock symbol must not be blank.");
+        }
+        if (companyName == null || companyName.isBlank()) {
+            throw new IllegalArgumentException("Company name must not be blank.");
+        }
+        if (referencePrice == null || referencePrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Reference price must be positive.");
+        }
 
-    if (symbol == null || symbol.isBlank()) {
-        throw new IllegalArgumentException("Stock symbol must not be blank.");
+        this.symbol = symbol.trim().toUpperCase(Locale.ROOT);
+        this.companyName = companyName;
+        this.referencePrice = referencePrice;
+        this.lastTradedPrice = null;
     }
 
-    if (companyName == null || companyName.isBlank()) {
-        throw new IllegalArgumentException("Company name must not be blank.");
+    public String getSymbol() {
+        return symbol;
     }
 
-    if (referencePrice == null ||
-            referencePrice.compareTo(BigDecimal.ZERO) <= 0) {
-        throw new IllegalArgumentException("Reference price must be positive.");
+    public String getCompanyName() {
+        return companyName;
     }
 
-   this.symbol = symbol.trim().toUpperCase();
-    this.companyName = companyName;
-    this.referencePrice = referencePrice;
-    this.lastTradedPrice = null;
-}
+    public BigDecimal getReferencePrice() {
+        return referencePrice;
+    }
 
-public String getSymbol() {
-    return symbol;
-}
-
-public String getCompanyName() {
-    return companyName;
-}
-
-public BigDecimal getReferencePrice() {
-    return referencePrice;
-}
-
-public BigDecimal getLastTradedPrice() {
-    return lastTradedPrice;
-}
+    public BigDecimal getLastTradedPrice() {
+        return lastTradedPrice;
+    }
 
     public BigDecimal getPriceChange() {
         BigDecimal lastPrice = lastTradedPrice;
@@ -65,15 +59,11 @@ public BigDecimal getLastTradedPrice() {
                 .divide(referencePrice, 4, RoundingMode.HALF_UP);
     }
 
-void updateLastTradedPrice(BigDecimal executionPrice) {
-    if (executionPrice == null ||
-            executionPrice.compareTo(BigDecimal.ZERO) <= 0) {
-        throw new IllegalArgumentException(
-                "Execution price must be positive."
-        );
+    void updateLastTradedPrice(BigDecimal executionPrice) {
+        if (executionPrice == null || executionPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Execution price must be positive.");
+        }
+
+        this.lastTradedPrice = executionPrice;
     }
-
-    this.lastTradedPrice = executionPrice;
-}
-
 }

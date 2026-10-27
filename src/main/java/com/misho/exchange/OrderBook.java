@@ -26,6 +26,9 @@ public class OrderBook {
         if (order == null) {
             throw new IllegalArgumentException("Order must not be null.");
         }
+        if (!order.isActive()) {
+            throw new IllegalArgumentException("Order must be active.");
+        }
         if (order.getOrderType() != OrderType.LIMIT) {
             throw new IllegalArgumentException("Only limit orders can rest in the order book.");
         }

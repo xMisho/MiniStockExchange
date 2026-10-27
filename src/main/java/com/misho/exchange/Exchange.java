@@ -3,10 +3,9 @@ package com.misho.exchange;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
-
-
 
 public class Exchange {
 
@@ -19,95 +18,95 @@ public class Exchange {
     }
 
     public void registerStock(Stock stock) {
-    if (stock == null) {
-        throw new IllegalArgumentException("Stock must not be null.");
+        if (stock == null) {
+            throw new IllegalArgumentException("Stock must not be null.");
+        }
+
+        String symbol = stock.getSymbol();
+
+        if (stocks.containsKey(symbol)) {
+            throw new IllegalArgumentException("Stock symbol is already registered.");
+        }
+
+        stocks.put(symbol, stock);
+        engines.put(symbol, new MatchingEngine(new OrderBook(), stock));
     }
 
-    String symbol = stock.getSymbol();
+    public Stock getStock(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            return null;
+        }
 
-    if (stocks.containsKey(symbol)) {
-        throw new IllegalArgumentException("Stock symbol is already registered.");
+        return stocks.get(symbol.trim().toUpperCase(Locale.ROOT));
     }
 
-    stocks.put(symbol, stock);
-    engines.put(symbol, new MatchingEngine(new OrderBook(), stock));
-}
-
-public Stock getStock(String symbol) {
-    if (symbol == null || symbol.isBlank()) {
-        return null;
+    public int getStockCount() {
+        return stocks.size();
     }
 
-    return stocks.get(symbol.trim().toUpperCase());
-}
+    private MatchingEngine getEngineOrThrow(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("Stock symbol must not be blank.");
+        }
 
-public int getStockCount() {
-    return stocks.size();
-}
+        MatchingEngine engine =
+                engines.get(symbol.trim().toUpperCase(Locale.ROOT));
 
-private MatchingEngine getEngineOrThrow(String symbol) {
-    if (symbol == null || symbol.isBlank()) {
-        throw new IllegalArgumentException("Stock symbol must not be blank.");
+        if (engine == null) {
+            throw new IllegalArgumentException("Stock is not registered.");
+        }
+
+        return engine;
     }
 
-    MatchingEngine engine =
-            engines.get(symbol.trim().toUpperCase());
-
-    if (engine == null) {
-        throw new IllegalArgumentException("Stock is not registered.");
+    public void submitOrder(String symbol, Order order) {
+        getEngineOrThrow(symbol).submitOrder(order);
     }
 
-    return engine;
-}
+    public int getTradeCount(String symbol) {
+        return getEngineOrThrow(symbol).getTradeCount();
+    }
 
-public void submitOrder(String symbol, Order order) {
-    getEngineOrThrow(symbol).submitOrder(order);
-}
+    public int getOpenOrderCount(String symbol) {
+        return getEngineOrThrow(symbol).getOpenOrderCount();
+    }
 
-public int getTradeCount(String symbol) {
-    return getEngineOrThrow(symbol).getTradeCount();
-}
+    public boolean cancelOrder(String symbol, long orderId) {
+        return getEngineOrThrow(symbol).cancelOrder(orderId);
+    }
 
-public int getOpenOrderCount(String symbol) {
-    return getEngineOrThrow(symbol).getOpenOrderCount();
-}
+    public boolean amendOrder(
+            String symbol,
+            long orderId,
+            BigDecimal newPrice,
+            int newRemainingQuantity) {
 
-public boolean cancelOrder(String symbol, long orderId) {
-    return getEngineOrThrow(symbol).cancelOrder(orderId);
-}
+        return getEngineOrThrow(symbol).amendOrder(
+                orderId,
+                newPrice,
+                newRemainingQuantity
+        );
+    }
 
-public boolean amendOrder(
-        String symbol,
-        long orderId,
-        BigDecimal newPrice,
-        int newRemainingQuantity) {
+    public BigDecimal getBestBidPrice(String symbol) {
+        return getEngineOrThrow(symbol).getBestBidPrice();
+    }
 
-    return getEngineOrThrow(symbol).amendOrder(
-            orderId,
-            newPrice,
-            newRemainingQuantity
-    );
-}
+    public BigDecimal getBestAskPrice(String symbol) {
+        return getEngineOrThrow(symbol).getBestAskPrice();
+    }
 
-public BigDecimal getBestBidPrice(String symbol) {
-    return getEngineOrThrow(symbol).getBestBidPrice();
-}
+    public BigDecimal getSpread(String symbol) {
+        return getEngineOrThrow(symbol).getSpread();
+    }
 
-public BigDecimal getBestAskPrice(String symbol) {
-    return getEngineOrThrow(symbol).getBestAskPrice();
-}
+    public long getTotalTradedVolume(String symbol) {
+        return getEngineOrThrow(symbol).getTotalTradedVolume();
+    }
 
-public BigDecimal getSpread(String symbol) {
-    return getEngineOrThrow(symbol).getSpread();
-}
-
-public long getTotalTradedVolume(String symbol) {
-    return getEngineOrThrow(symbol).getTotalTradedVolume();
-}
-
-public List<Trade> getTradeHistory(String symbol) {
-    return getEngineOrThrow(symbol).getTradeHistory();
-}
+    public List<Trade> getTradeHistory(String symbol) {
+        return getEngineOrThrow(symbol).getTradeHistory();
+    }
 
     public BigDecimal getLastTradedPrice(String symbol) {
         Stock stock = getStock(symbol);
@@ -118,6 +117,7 @@ public List<Trade> getTradeHistory(String symbol) {
 
         return stock.getLastTradedPrice();
     }
+
     public Order getOpenOrder(String symbol, long orderId) {
         return getEngineOrThrow(symbol).getOpenOrder(orderId);
     }
@@ -160,6 +160,10 @@ public List<Trade> getTradeHistory(String symbol) {
             throw new IllegalArgumentException("Stock is not registered.");
         }
         return stock.getPriceChangePercent();
+    }
+
+    public MarketSnapshot getMarketSnapshot(String symbol) {
+        return getEngineOrThrow(symbol).getMarketSnapshot();
     }
 
     Order submitGeneratedOrder(String symbol, OrderSide side, OrderType type,

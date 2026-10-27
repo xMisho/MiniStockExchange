@@ -8,8 +8,8 @@ public final class Main {
     private Main() { }
 
     public static void main(String[] args) throws InterruptedException {
-        if (args.length > 3) {
-            throw new IllegalArgumentException("Usage: Main [durationSeconds] [intervalMillis] [seed]");
+        if (args.length > 4) {
+            throw new IllegalArgumentException("Usage: Main [durationSeconds] [intervalMillis] [seed] [selectedSymbol]");
         }
         long durationSeconds = args.length > 0 ? Long.parseLong(args[0]) : 10;
         long intervalMillis = args.length > 1 ? Long.parseLong(args[1]) : 100;
@@ -23,24 +23,41 @@ public final class Main {
         exchange.registerStock(new Stock("TSLA", "Tesla Inc.", new BigDecimal("200.00")));
         List<String> symbols = List.of("AAPL", "TSLA");
 
-        long submitted;
-        try (MarketSimulator simulator = new MarketSimulator(exchange, symbols, intervalMillis, 10, 50, seed)) {
-            System.out.println("Simulating AAPL and TSLA for " + durationSeconds + " seconds...");
+        boolean interactiveTerminal = System.console() != null && !"dumb".equals(System.getenv("TERM"));
+        String clearOverride = System.getProperty("dashboard.clear");
+        boolean clearScreen = clearOverride == null ? interactiveTerminal : Boolean.parseBoolean(clearOverride);
+        boolean useColor = clearScreen && System.getenv("NO_COLOR") == null
+                && !"false".equalsIgnoreCase(System.getProperty("dashboard.color"));
+        String selectedSymbol = args.length > 3 ? args[3] : "AAPL";
+        ConsoleDashboard dashboard = new ConsoleDashboard(
+                exchange, symbols, System.out, clearScreen, useColor, selectedSymbol);
+        Thread terminalCleanup = new Thread(dashboard::close, "dashboard-terminal-cleanup");
+        Runtime.getRuntime().addShutdownHook(terminalCleanup);
+        try (dashboard; MarketSimulator simulator = new MarketSimulator(exchange, symbols, intervalMillis, 10, 50, seed)) {
+            long started = System.nanoTime();
             simulator.start();
-            Thread.sleep(durationMillis);
+            while (true) {
+                if (simulator.getLastFailure() != null) {
+                    throw new IllegalStateException("Simulation failed.", simulator.getLastFailure());
+                }
+                long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+                if (elapsedMillis >= durationMillis) {
+                    break;
+                }
+                dashboard.refresh(elapsedMillis / 1_000, simulator.getSubmittedOrderCount(), true);
+                Thread.sleep(Math.min(1_000, durationMillis - elapsedMillis));
+            }
             simulator.stop();
             if (simulator.getLastFailure() != null) {
                 throw new IllegalStateException("Simulation failed.", simulator.getLastFailure());
             }
-            submitted = simulator.getSubmittedOrderCount();
-        }
-        System.out.println("Submitted orders: " + submitted);
-        for (String symbol : symbols) {
-            System.out.println(symbol + " | trades=" + exchange.getTradeCount(symbol)
-                    + " | volume=" + exchange.getTotalTradedVolume(symbol)
-                    + " | last=" + exchange.getLastTradedPrice(symbol)
-                    + " | open=" + exchange.getOpenOrderCount(symbol)
-                    + " | VWAP=" + exchange.getVwap(symbol));
+            dashboard.refresh((System.nanoTime() - started) / 1_000_000_000,
+                    simulator.getSubmittedOrderCount(), false);
+        } finally {
+            try {
+                Runtime.getRuntime().removeShutdownHook(terminalCleanup);
+            } catch (IllegalStateException ignored) {
+            }
         }
     }
 }

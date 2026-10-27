@@ -56,6 +56,9 @@ public class MatchingEngine {
         if (order == null) {
             throw new IllegalArgumentException("Order must not be null.");
         }
+        if (!order.isActive()) {
+            throw new IllegalArgumentException("Order must be active.");
+        }
         if (!usedOrderIds.add(order.getOrderId())) {
             throw new IllegalArgumentException("Order ID has already been used.");
         }
@@ -258,6 +261,22 @@ public class MatchingEngine {
                 2,
                 RoundingMode.HALF_UP
         );
+    }
+
+    public synchronized MarketSnapshot getMarketSnapshot() {
+        BigDecimal lastPrice = tradeHistory.isEmpty()
+                ? null : tradeHistory.get(tradeHistory.size() - 1).getExecutionPrice();
+        BigDecimal change = stock == null || lastPrice == null
+                ? null : lastPrice.subtract(stock.getReferencePrice());
+        BigDecimal changePercent = change == null ? null
+                : change.multiply(BigDecimal.valueOf(100))
+                        .divide(stock.getReferencePrice(), 4, RoundingMode.HALF_UP);
+        return new MarketSnapshot(
+                stock == null ? null : stock.getSymbol(),
+                lastPrice, change, changePercent,
+                orderBook.getBestBidPrice(), orderBook.getBestAskPrice(),
+                totalTradedVolume, tradeHistory.size(), orderBook.getOpenOrderCount(), getVwap(),
+                getLatestOhlcCandle(), orderBook.getBuyDepth(), orderBook.getSellDepth());
     }
 
     public synchronized long getTotalTradedVolume() {

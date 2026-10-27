@@ -15,9 +15,10 @@ java -cp target/mini-stock-exchange-1.0.0-SNAPSHOT.jar com.misho.exchange.Main 1
 
 Arguments are duration in seconds, interval between orders in milliseconds, and
 random seed. Defaults are `10`, `100`, and `42`. The launcher registers synthetic
-AAPL and TSLA stocks at reference prices 250.00 and 200.00, generates orders, stops,
-and prints final statistics. These are example prices, not current market quotes.
-There is no continuously refreshing dashboard yet.
+AAPL and TSLA stocks at reference prices 250.00 and 200.00, generates orders,
+and refreshes a live console dashboard once per second. It stops before showing
+the final statistics. These are example prices, not current market quotes.
+See [dashboard usage](console-dashboard.md) for display and terminal behavior.
 
 ## Configuration and controls
 
