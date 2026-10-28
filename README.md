@@ -2,7 +2,7 @@
 
 A concurrent Java multi-stock exchange simulator with price-time priority, limit and market orders, order amendments, trading analytics, and a live console dashboard.
 
-Java 17+ · Maven · JUnit 5 · Concurrent matching · 12 V2 features · No runtime dependencies
+Java 17+ · Maven · Spring Boot · JUnit · Concurrent matching · 12 V2 features
 
 ## Core matching behavior
 
@@ -49,22 +49,28 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | `MarketSnapshot` | Immutable per-stock statistics captured under the engine monitor |
 | `ConsoleDashboard` | Live console rendering with plain-output fallback |
 | `Main` | Simulator and dashboard launcher |
+| `MiniStockExchangeApplication` | Spring Boot web application entry point |
+| `HealthController` | Basic HTTP health endpoint |
 
 ```text
 MiniStockExchange/
 ├── README.md
 ├── .gitignore
 ├── pom.xml
+├── mvnw / mvnw.cmd
+├── .mvn/wrapper/
 ├── assets/
 │   └── dashboard.png
 └── src/
     ├── main/java/com/misho/exchange/
     │   ├── ConsoleDashboard.java
     │   ├── Exchange.java
+    │   ├── HealthController.java
     │   ├── Main.java
     │   ├── MarketSimulator.java
     │   ├── MarketSnapshot.java
     │   ├── MatchingEngine.java
+    │   ├── MiniStockExchangeApplication.java
     │   ├── OhlcCandle.java
     │   ├── Order.java
     │   ├── OrderBook.java
@@ -73,15 +79,37 @@ MiniStockExchange/
     │   ├── OrderType.java
     │   ├── Stock.java
     │   └── Trade.java
+    ├── main/resources/application.properties
     └── test/java/com/misho/exchange/
         ├── ConsoleDashboardTest.java
         ├── SubmissionValidationTest.java
         ├── MarketSimulatorTest.java
         ├── MatchingEngineConcurrencyTest.java
+        ├── MiniStockExchangeApplicationTests.java
         ├── MiniStockExchangeTest.java
         ├── OhlcTest.java
         └── PriceChangeTest.java
 ```
+
+## V3 foundation: Spring Boot
+
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. Database persistence, authentication, trading endpoints, and the web frontend are not implemented yet.
+
+Start the web application from the repository root:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Open `http://localhost:8080/api/health`. A running server returns:
+
+```json
+{"status":"UP"}
+```
+
+Stop it with Ctrl+C. This endpoint checks that the web application is responding; it does not check a database or expose the exchange. The root URL has no page yet. Starting the web server does not automatically start the market simulator.
+
+The generated Maven wrapper downloads its configured Maven distribution on first use. On Windows, use `mvnw.cmd` instead of `./mvnw`.
 
 ## Build and run
 
@@ -90,7 +118,7 @@ Install JDK 17 or newer and Maven 3.9+. Clone and verify the project:
 ```bash
 git clone https://github.com/xMisho/MiniStockExchange.git
 cd MiniStockExchange
-mvn clean verify
+./mvnw clean verify
 ```
 
 Run the dashboard from the repository root in VS Code’s integrated **Terminal** or another ANSI-capable terminal:
@@ -108,7 +136,13 @@ The positional arguments are optional:
 | `seed` | Seed for random order generation | `42` |
 | `selectedSymbol` | Stock shown in the OHLC and depth sections | `AAPL` |
 
-The launcher registers simulated AAPL and TSLA stocks with reference prices of 250.00 and 200.00. These are example prices, not live market quotes. The JAR has no executable manifest, so launch it by class name as shown above. After changing code, rebuild with `mvn package`.
+The launcher registers simulated AAPL and TSLA stocks with reference prices of 250.00 and 200.00. These are example prices, not live market quotes. The plain JAR has no executable manifest, so launch the console by class name as shown above. After changing code, rebuild with `./mvnw package`.
+
+Packaging also creates a separate executable Spring Boot JAR:
+
+```bash
+java -jar target/mini-stock-exchange-1.0.0-SNAPSHOT-boot.jar
+```
 
 ### Dashboard controls and terminal behavior
 
@@ -218,7 +252,7 @@ Surefire writes results to `target/surefire-reports/`. Concurrency tests validat
 
 ## Scope and limitations
 
-This is a multi-stock, in-memory learning project. It has no persistence, web frontend, network API, fees, account balances, or real exchange connectivity. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
+This is a multi-stock, in-memory learning project. It has no persistence, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The initial Spring Boot endpoint only reports web-server health. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
 
 Register stocks before concurrent trading begins. Use one engine per initially empty book, and interact through the engine during concurrent activity. Do not share submitted order instances across engines, mutate submitted orders, or access their books directly. Returned open orders are live objects, not immutable snapshots; use market snapshots for consistent concurrent statistics. Separate getter calls are independent observations.
 
@@ -232,4 +266,4 @@ V2 extended that foundation with amendments, separate stock markets, market-orde
 
 Extracted from [Java-Projects](https://github.com/xMisho/Java-Projects), preserving commits that changed this project’s Java sources, including original authors, timestamps, and commit messages. Commit hashes changed because unrelated files and directory prefixes were removed. The Maven migration is a subsequent commit. The original monorepo remains available.
 
-The layout follows [Maven’s standard directory conventions](https://maven.apache.org/guides/introduction/introduction-to-the-standard-directory-layout.html); tests use [JUnit 5](https://docs.junit.org/5.11.4/user-guide/).
+The layout follows [Maven’s standard directory conventions](https://maven.apache.org/guides/introduction/introduction-to-the-standard-directory-layout.html); test dependencies are managed by the Spring Boot parent.
