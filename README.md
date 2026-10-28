@@ -51,11 +51,15 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | `Main` | Simulator and dashboard launcher |
 | `MiniStockExchangeApplication` | Spring Boot web application entry point |
 | `HealthController` | Basic HTTP health endpoint |
+| `stock.StockEntity` / `StockRepository` | Database stock mapping and JPA queries |
+| `stock.StockService` / `StockController` | Stock registration, validation, and REST endpoints |
+| `stock.StockResponse` | Stock metadata returned by the API |
 
 ```text
 MiniStockExchange/
 ├── README.md
 ├── .gitignore
+├── .env.example
 ├── pom.xml
 ├── mvnw / mvnw.cmd
 ├── .mvn/wrapper/
@@ -79,13 +83,16 @@ MiniStockExchange/
     │   ├── OrderType.java
     │   ├── Stock.java
     │   └── Trade.java
-    ├── main/resources/application.properties
+    ├── main/resources/
+    │   ├── application.properties
+    │   └── db/migration/
     └── test/java/com/misho/exchange/
         ├── ConsoleDashboardTest.java
         ├── SubmissionValidationTest.java
         ├── MarketSimulatorTest.java
         ├── MatchingEngineConcurrencyTest.java
         ├── MiniStockExchangeApplicationTests.java
+        ├── PostgresqlSetupTest.java
         ├── MiniStockExchangeTest.java
         ├── OhlcTest.java
         └── PriceChangeTest.java
@@ -93,9 +100,9 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. Database persistence, authentication, trading endpoints, and the web frontend are not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User accounts, order/trade persistence, trading endpoints, and the web frontend are not implemented yet.
 
-Start the web application from the repository root:
+Set up PostgreSQL as described below, then start the web application from the repository root:
 
 ```bash
 ./mvnw spring-boot:run
@@ -107,13 +114,104 @@ Open `http://localhost:8080/api/health`. A running server returns:
 {"status":"UP"}
 ```
 
-Stop it with Ctrl+C. This endpoint checks that the web application is responding; it does not check a database or expose the exchange. The root URL has no page yet. Starting the web server does not automatically start the market simulator.
+Stop it with Ctrl+C. This endpoint checks that the web application is responding; it does not continuously probe the database or expose the exchange. Application startup requires a working database connection and successful migrations. The root URL has no page yet. Starting the web server does not automatically start the market simulator.
 
 The generated Maven wrapper downloads its configured Maven distribution on first use. On Windows, use `mvnw.cmd` instead of `./mvnw`.
 
+## Persisted stocks and REST endpoints
+
+The `exchange.stocks` table contains the approved metadata fields:
+
+| Column | PostgreSQL type | Rules |
+| --- | --- | --- |
+| `symbol` | `VARCHAR(20)` | Primary key; required and nonblank |
+| `company_name` | `VARCHAR(255)` | Required and nonblank |
+| `reference_price` | `NUMERIC(19,4)` | Required and strictly positive |
+
+The Java service trims names and normalizes symbols with `Locale.ROOT`. Prices that would lose decimal precision or exceed the column range are rejected instead of silently rounded. Duplicate registration is rejected; creation uses JPA `persist`, so a concurrent duplicate cannot silently update an existing row.
+
+After starting Spring Boot:
+
+```bash
+curl http://localhost:8080/api/stocks
+curl http://localhost:8080/api/stocks/AAPL
+```
+
+- `POST /api/stocks` validates and saves metadata, returns `201 Created` with a Location header, `400` for invalid data, or `409 Conflict` for an existing symbol. Concurrent duplicates cannot overwrite an existing row.
+- `GET /api/stocks` returns metadata sorted by symbol, or `[]` if none is saved.
+- `GET /api/stocks/{symbol}` accepts case-insensitive symbols, returns `404` for an unknown symbol, and `400` for an invalid symbol.
+- Each response contains only `symbol`, `companyName`, and `referencePrice`.
+
+Example record:
+
+```json
+{"symbol":"AAPL","companyName":"Apple Inc.","referencePrice":250.0000}
+```
+
+The table starts empty on a fresh installation; migrations do not automatically seed market prices. Register stocks through the API:
+
+```bash
+curl -i -X POST http://localhost:8080/api/stocks \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"AAPL","companyName":"Apple Inc.","referencePrice":345.29}'
+
+curl -i -X POST http://localhost:8080/api/stocks \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"TSLA","companyName":"Tesla, Inc.","referencePrice":401.70}'
+```
+
+These values were registered in the original local development database using timestamped USD quotes observed on October 28, 2026: [Apple, $345.29 at 11:43 AM EDT](https://stockanalysis.com/stocks/aapl/) and [Tesla, $401.70 at 11:24 AM EDT](https://stockanalysis.com/stocks/tsla/). They are fixed reference-price snapshots, not guaranteed current quotes or a live feed; obtain fresh prices for a new registration. Reposting an existing symbol returns `409` and leaves the saved record unchanged.
+
+Registration is also available through `StockService.registerStock(symbol, companyName, referencePrice)` for application code. Integration tests use their own records in the separate test database and remove only those records afterward. This local-development write endpoint has no authentication yet; access control will be added with the users feature.
+
+`StockEntity` lives in `com.misho.exchange.stock`, separate from the existing engine `Stock` class. Saved metadata survives application restarts, but saving a stock does not register it in a live `Exchange`, create its matching engine, or persist its last price or order book. That integration is a later step.
+
+## PostgreSQL setup
+
+PostgreSQL 17 must be running locally before starting Spring Boot or running the Spring integration tests. There is no H2 fallback. Flyway creates the `exchange` schema and `stocks` table. Stock metadata can be stored and retrieved through JPA; users, orders, and trades are not stored yet. The matching engine still runs in memory.
+
+For a new local setup, connect as a PostgreSQL administrator:
+
+```bash
+psql -d postgres
+```
+
+Create a dedicated login and separate development/test databases. The `\password` command prompts for the password rather than placing it in SQL or shell history:
+
+```sql
+CREATE ROLE mini_stock_exchange LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+\password mini_stock_exchange
+CREATE DATABASE mini_stock_exchange OWNER mini_stock_exchange;
+CREATE DATABASE mini_stock_exchange_test OWNER mini_stock_exchange;
+```
+
+Exit psql with `\q`. Copy the configuration template, restrict access, and edit `.env` to enter the password you set:
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+`DB_URL` selects the development database, `DB_TEST_URL` the test database, and `DB_USERNAME` / `DB_PASSWORD` supply the credentials. Keep the test database separate and use a name ending in `_test`. Environment variables can override the file. The application reads `.env` from the working directory, so launch from the repository root or supply the variables explicitly.
+
+`.env` and other local `.env.*` files are ignored by Git; `.env.example` contains placeholders only. Do not put passwords in committed properties files. On the original development machine these databases and a private `.env` have already been created, so do not recreate them or overwrite that file.
+
+Flyway runs `src/main/resources/db/migration/V1__initialize_exchange_schema.sql` on first startup and records it in `public.flyway_schema_history`. Later starts validate previously applied migrations and run only new ones. V1 creates the `exchange` schema and V2 creates its `stocks` table. Later tables will use new versioned migrations. Do not edit migrations after they have been applied.
+
+Hibernate uses `ddl-auto=validate`; it will not silently create or update tables. Open Session in View is disabled. The Flyway clean operation is disabled as well.
+
+On the original Homebrew-based macOS setup, the installed PostgreSQL server can be started and stopped without changing login-service settings:
+
+```bash
+/opt/homebrew/opt/postgresql@17/bin/pg_ctl -D /opt/homebrew/var/postgresql@17 -l /opt/homebrew/var/postgresql@17/server.log -w start
+/opt/homebrew/opt/postgresql@17/bin/pg_ctl -D /opt/homebrew/var/postgresql@17 -m fast -w stop
+```
+
+Only stop it when no other local applications need that server. On other installations, use that installation’s service controls. Docker Compose and Testcontainers are deferred; this step uses the existing local PostgreSQL installation.
+
 ## Build and run
 
-Install JDK 17 or newer and Maven 3.9+. Clone and verify the project:
+Install JDK 17 or newer. Clone the project, complete the PostgreSQL setup above, then verify with the Maven wrapper:
 
 ```bash
 git clone https://github.com/xMisho/MiniStockExchange.git
@@ -244,6 +342,8 @@ mvn test
 mvn -Dtest=ConsoleDashboardTest test
 ```
 
+Spring integration tests use the `test` profile and the dedicated `DB_TEST_URL` database. They verify real PostgreSQL connectivity, Flyway migration history, a Hibernate query, the HTTP health endpoint, stock constraints, registration/read endpoints, malformed payload rejection, concurrent duplicate rejection, and stock persistence after closing and restarting the application. Core matching and console tests remain independent of the database.
+
 The test suite covers matching, FIFO priority, partial fills, cancellation, duplicate IDs, amendment priority, multi-stock isolation, market orders, lifecycle status, indexed lookup, depth, analytics, OHLC boundaries, price changes, simulator lifecycle, symbol normalization, and dashboard rendering and terminal cleanup.
 
 Concurrency tests exercise matching and snapshot reads while orders are submitted. The original matching stress test expects **2,000 trades, volume 2,000, and zero open orders**. Worker failures propagate to the test. OHLC tests use an injected clock for exact boundaries without sleeping.
@@ -252,7 +352,7 @@ Surefire writes results to `target/surefire-reports/`. Concurrency tests validat
 
 ## Scope and limitations
 
-This is a multi-stock, in-memory learning project. It has no persistence, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The initial Spring Boot endpoint only reports web-server health. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
+This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, but no persistent user/order/trade models, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
 
 Register stocks before concurrent trading begins. Use one engine per initially empty book, and interact through the engine during concurrent activity. Do not share submitted order instances across engines, mutate submitted orders, or access their books directly. Returned open orders are live objects, not immutable snapshots; use market snapshots for consistent concurrent statistics. Separate getter calls are independent observations.
 
