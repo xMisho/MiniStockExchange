@@ -59,6 +59,10 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | `user.PasswordConfiguration` | Salted PBKDF2 password encoder |
 | `user.DatabaseUserDetailsService` | Loads credentials and roles for Spring Security |
 | `auth.SecurityConfiguration` / `AuthController` | Session login/logout, CSRF, access rules, and current-user profile |
+| `trading.OrderEntity` / `OrderRepository` | Owned order snapshots, FIFO sequencing, and optimistic locking |
+| `trading.TradeEntity` / `TradeRepository` | Persistent execution records and history queries |
+| `trading.TradingService` | Service-owned transactions, staged matching, ownership, and recovery |
+| `trading.MarketLoader` / `MarketRegistry` | Validated restoration and publication of committed engines |
 
 ```text
 MiniStockExchange/
@@ -105,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Order/trade persistence, trading endpoints, and the web frontend are not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`; trading HTTP endpoints and the web frontend are not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -279,9 +283,92 @@ The session cookie is HttpOnly and SameSite=Lax, and sessions expire after 30 mi
 
 Local development uses HTTP. For HTTPS deployment, set `SESSION_COOKIE_SECURE=true` to require secure cookies. Keep the application local until deployment controls, login throttling, email verification, and the frontend integration are addressed. Cross-origin frontend access is not configured in this step.
 
+## Orders, trades, and persistent matching
+
+The database model and `TradingService` are implemented, including staged matching, failure recovery, and startup restoration. Trading HTTP endpoints are still Step 3. The standalone console simulator remains an independent in-memory demo and does not write orders or trades to PostgreSQL.
+
+Flyway V5 creates `exchange.orders`, `exchange.trades`, and an order-priority sequence. Stock links use `stock_symbol`, referencing the existing `stocks.symbol` primary key; there is no separate numeric stock ID. Database order IDs are global across stocks and are intended to become the engine order IDs in the later integration.
+
+### Orders
+
+| Column | Meaning |
+| --- | --- |
+| `id` | Generated `BIGINT` order ID |
+| `user_id` | Required foreign key to the owner in `users` |
+| `stock_symbol` | Required foreign key to `stocks` |
+| `side` / `order_type` | BUY or SELL; LIMIT or MARKET |
+| `limit_price` | Positive `NUMERIC(19,4)` for LIMIT; null for MARKET |
+| `original_quantity` | Positive quantity originally submitted; never amended |
+| `remaining_quantity` / `filled_quantity` | Current nonnegative quantities |
+| `status` | OPEN, PARTIALLY_FILLED, FILLED, or CANCELLED |
+| `priority_sequence` | Unique positive FIFO priority allocated from a database sequence |
+| `created_at` / `updated_at` | Original creation and latest state-update timestamps in UTC |
+| `version` | JPA optimistic-lock version that rejects stale database updates |
+
+An OPEN order has positive remaining quantity and no fills. PARTIALLY_FILLED has positive remaining and filled quantities. FILLED has zero remaining and positive filled quantity. CANCELLED retains its unfilled remaining quantity, matching the existing engine behavior.
+
+There is deliberately no constraint requiring `original_quantity = remaining_quantity + filled_quantity`: amendments can increase or reduce remaining quantity while the original quantity stays historical. Filled quantity cannot decrease through the entity's state-update method, and terminal orders cannot be reactivated there. Prices are validated for exact four-decimal storage rather than silently rounded.
+
+FIFO restoration must use `priority_sequence`, not `created_at` or order ID. Same-price reductions preserve that sequence; increased remaining quantity or a changed price requires a fresh sequence. Amendments preserve original creation time. Sequence values may have gaps; they are ordering tokens, not order counts. `TradingService` serializes priority allocation with matching operations so allocation order reflects accepted queue order.
+
+`OrderRepository` exposes owner history, all previously used IDs for a stock, and active LIMIT orders in priority order. It also identifies unfinished MARKET orders separately: those must never be restored as resting orders. An unfinished persisted MARKET is a condition the recovery layer must reject or reconcile, rather than silently ignore.
+
+### Trades
+
+| Column | Meaning |
+| --- | --- |
+| `id` | Generated `BIGINT` execution sequence ID |
+| `stock_symbol` | Stock that traded |
+| `buy_order_id` / `sell_order_id` | Required references to two distinct orders |
+| `execution_price` | Positive `NUMERIC(19,4)` actual execution price |
+| `quantity` | Positive executed share quantity |
+| `executed_at` | Original execution timestamp in UTC |
+
+Two additional database-generated labels, `buy_side` and `sell_side`, are fixed to BUY and SELL. Composite foreign keys use those labels with the stock symbol to prevent wrong-side or cross-stock order references, including direct SQL inserts. They are integrity helpers, not application-supplied trade fields.
+
+JPA trade fields are not updatable. Histories are loaded by trade ID to preserve execution ordering even when timestamps tie or a clock moves backward. Trade IDs must be allocated in actual execution order by the future coordinator. `TradeRepository` also provides internal queries for trades involving a particular user's orders. These queries are not exposed as public endpoints.
+
+Foreign keys retain history: users, stocks, and referenced orders cannot be deleted while dependent orders/trades exist. Indexes support owner history, restoration ordering, stock trade history, and trade/order lookups. SQL does not compute cross-row fill totals. `TradingService` persists order states and new trades together, and recovery verifies that saved trade quantities agree with each order’s filled quantity.
+
+### Transaction and engine consistency
+
+`TradingService` is the only supported coordinator for persisted trading. It supports submission, cancellation, amendment, owned order history, market snapshots, trade history, and candle reads as Java service methods. No trading controllers were added in this step. Later controllers must derive the actor ID from the authenticated user rather than trust a client-supplied owner ID.
+
+Each mutation follows this sequence:
+
+1. Hold the service’s synchronization monitor through preparation, matching, transaction completion, and publication.
+2. Open a service-owned database transaction and acquire a PostgreSQL advisory transaction lock, with a five-second lock-wait limit.
+3. Rebuild a **private candidate engine** from committed order/trade records. Persist a new order ID when submitting, then mutate only that candidate.
+4. Save updated quantities, statuses, prices, FIFO sequences, and every new trade in the same transaction. Flush and commit.
+5. Publish the candidate engine only after commit has returned successfully. Readers acquire the same service monitor, so they cannot observe the uncommitted candidate.
+
+A SQL rollback does not undo Java memory. Staging avoids mutating the published engine in the first place. On a runtime failure, the service discards the candidate and attempts to reconstruct the market from the actual committed database state. It does not assume that a transaction error means PostgreSQL rolled back: commit may already have succeeded.
+
+If reconciliation succeeds, the recovered engine is published and the original operation still reports a failure. **Inspect durable order history before retrying a failed operation**, especially after a commit/publication error. The service does not automatically retry commands and does not yet offer request-idempotency keys. A committed operation can therefore exist even when its caller received an exception; Step 3 must make this behavior explicit at the HTTP boundary.
+
+If reconciliation fails, that market’s cached engine is removed and its trading/snapshot operations remain blocked until explicit `recoverMarket(symbol)` succeeds or the application restarts successfully. Durable order-history reads remain available when the database is accessible. Unknown symbols are ordinary input errors and do not permanently disable a subsequently registered stock.
+
+The service rejects calls made inside an existing database transaction: an outer rollback must not undo records after a candidate has already been published. Database optimistic versions remain a guard against stale updates. A checked integer addition also prevents cumulative fill counts from silently wrapping after repeated amendments.
+
+### Startup and restart recovery
+
+The application-ready listener restores all registered stocks from PostgreSQL before completing application startup. It loads active LIMIT orders by saved FIFO priority, preserves original/remaining/filled quantities and creation timestamps, reserves IDs from terminal as well as active orders, and replays existing trade history by execution ID for last price, volume, VWAP, and OHLC. Restoration does not call matching or create new trades.
+
+Recovery rejects unfinished MARKET orders, crossed resting books, invalid saved trade references, and fill totals that disagree with trade history. It does not silently cancel corrupt records, invent executions, or discard history. Startup fails if saved market state cannot be restored; operators must investigate the data before serving persisted trading.
+
+The Step 2.5 test starts a fresh application context, verifies the restored book and analytics, then submits another order to prove the saved FIFO priority actually controls its fills. Other tests inject failures after candidate matching, during trade persistence, immediately before commit, after commit, and during publication/recovery. They also check blocked readers during commit, rollback of amendments/cancellations, ownership checks, admin overrides, and concurrent commands.
+
+### Current integration boundaries
+
+This is intentionally a **single-active-backend** design. Do not run multiple backend writers against one live market: the advisory transaction lock serializes participating database transactions, but it does not keep independently cached engines in different application instances synchronized. Direct repository/SQL changes to order/trade records bypass the coordinator and are unsupported during trading, apart from deliberate maintenance followed by recovery.
+
+Candidate reconstruction currently reads the complete market history for each mutation. That is simple and testable for this learning project, but it is not intended for high-volume production workloads. Sessions, the standalone `Exchange`, and the console simulator remain separate concerns; future web trading must route through `TradingService`.
+
+Normal users can view and manage their own orders through the service. Admins can inspect, amend, or cancel another user’s orders as an explicit operator override; ownership remains unchanged. The HTTP endpoints and their authorization/error/idempotency contracts remain Step 3.
+
 ## PostgreSQL setup
 
-PostgreSQL 17 must be running locally before starting Spring Boot or running the Spring integration tests. There is no H2 fallback. Flyway creates the `exchange` schema plus `stocks` and `users` tables. Stock metadata and registered users are stored through JPA; orders and trades are not stored yet. The matching engine still runs in memory.
+PostgreSQL 17 must be running locally before starting Spring Boot or running the Spring integration tests. There is no H2 fallback. Flyway creates the `exchange` schema plus `stocks`, `users`, `orders`, and `trades` tables. Stock metadata and users are integrated with APIs; orders and trades persist when operations use `TradingService`, while the standalone console still trades only in memory. The matching engine still runs in memory.
 
 For a new local setup, connect as a PostgreSQL administrator:
 
@@ -309,7 +396,7 @@ chmod 600 .env
 
 `.env` and other local `.env.*` files are ignored by Git; `.env.example` contains placeholders only. Do not put passwords in committed properties files. On the original development machine these databases and a private `.env` have already been created, so do not recreate them or overwrite that file.
 
-Flyway runs `src/main/resources/db/migration/V1__initialize_exchange_schema.sql` on first startup and records it in `public.flyway_schema_history`. Later starts validate previously applied migrations and run only new ones. V1 creates the `exchange` schema, V2 creates `stocks`, V3 creates `users`, and V4 adds user roles. Later tables will use new versioned migrations. Do not edit migrations after they have been applied.
+Flyway runs `src/main/resources/db/migration/V1__initialize_exchange_schema.sql` on first startup and records it in `public.flyway_schema_history`. Later starts validate previously applied migrations and run only new ones. V1 creates the `exchange` schema, V2 creates `stocks`, V3 creates `users`, and V4 adds user roles, and V5 creates the order/trade persistence model. Later tables will use new versioned migrations. Do not edit migrations after they have been applied.
 
 Hibernate uses `ddl-auto=validate`; it will not silently create or update tables. Open Session in View is disabled. The Flyway clean operation is disabled as well.
 
@@ -465,7 +552,7 @@ Surefire writes results to `target/surefire-reports/`. Concurrency tests validat
 
 ## Scope and limitations
 
-This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, plus user registration and session authentication, but no persistent order/trade models, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
+This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, plus user registration and session authentication, with persistent matching and engine recovery, but no web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
 
 Register stocks before concurrent trading begins. Use one engine per initially empty book, and interact through the engine during concurrent activity. Do not share submitted order instances across engines, mutate submitted orders, or access their books directly. Returned open orders are live objects, not immutable snapshots; use market snapshots for consistent concurrent statistics. Separate getter calls are independent observations.
 

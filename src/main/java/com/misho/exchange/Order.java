@@ -20,6 +20,11 @@ public class Order {
 
     public Order(long orderId, OrderSide side, OrderType orderType,
                  BigDecimal price, int quantity) {
+        this(orderId, side, orderType, price, quantity, System.currentTimeMillis());
+    }
+
+    private Order(long orderId, OrderSide side, OrderType orderType,
+                  BigDecimal price, int quantity, long timestamp) {
         if (orderId <= 0) {
             throw new IllegalArgumentException("Order ID must be positive.");
         }
@@ -48,7 +53,27 @@ public class Order {
         this.remainingQuantity = quantity;
         this.filledQuantity = 0;
         this.status = OrderStatus.OPEN;
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = timestamp;
+    }
+
+    public static Order restore(OrderSnapshot snapshot) {
+        if (snapshot == null || snapshot.status() == null
+                || snapshot.remainingQuantity() < 0 || snapshot.filledQuantity() < 0) {
+            throw new IllegalArgumentException("Invalid saved order.");
+        }
+        boolean valid = switch (snapshot.status()) {
+            case OPEN -> snapshot.remainingQuantity() > 0 && snapshot.filledQuantity() == 0;
+            case PARTIALLY_FILLED -> snapshot.remainingQuantity() > 0 && snapshot.filledQuantity() > 0;
+            case FILLED -> snapshot.remainingQuantity() == 0 && snapshot.filledQuantity() > 0;
+            case CANCELLED -> snapshot.remainingQuantity() > 0;
+        };
+        if (!valid) { throw new IllegalArgumentException("Invalid saved order quantities."); }
+        Order order = new Order(snapshot.id(), snapshot.side(), snapshot.type(), snapshot.price(),
+                snapshot.originalQuantity(), snapshot.timestamp());
+        order.remainingQuantity = snapshot.remainingQuantity();
+        order.filledQuantity = snapshot.filledQuantity();
+        order.status = snapshot.status();
+        return order;
     }
 
     public OrderType getOrderType() {
@@ -123,8 +148,9 @@ public class Order {
             throw new IllegalArgumentException("Fill quantity cannot exceed remaining quantity.");
         }
 
+        int updatedFilledQuantity = Math.addExact(filledQuantity, quantity);
         remainingQuantity -= quantity;
-        filledQuantity += quantity;
+        filledQuantity = updatedFilledQuantity;
         status = remainingQuantity == 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
     }
 

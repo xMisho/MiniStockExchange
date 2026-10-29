@@ -7,6 +7,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -20,6 +23,7 @@ public class MatchingEngine {
     private final Stock stock;
     private final List<Trade> tradeHistory;
     private final Set<Long> usedOrderIds;
+    private final Map<Long, Order> knownOrders = new LinkedHashMap<>();
     private long nextGeneratedOrderId = 1;
     private long totalTradedVolume;
     private BigDecimal totalTradedNotional;
@@ -62,6 +66,7 @@ public class MatchingEngine {
         if (!usedOrderIds.add(order.getOrderId())) {
             throw new IllegalArgumentException("Order ID has already been used.");
         }
+        knownOrders.put(order.getOrderId(), order);
         if (order.getOrderType() == OrderType.MARKET) {
             matchMarketOrder(order);
         } else {
@@ -113,17 +118,60 @@ public class MatchingEngine {
 
         buy.fill(quantity);
         sell.fill(quantity);
+        recordTrade(trade);
+    }
+
+    private void recordTrade(Trade trade) {
         tradeHistory.add(trade);
-        totalTradedVolume += quantity;
+        totalTradedVolume = Math.addExact(totalTradedVolume, trade.getQuantity());
         totalTradedNotional = totalTradedNotional.add(
-                executionPrice.multiply(BigDecimal.valueOf(quantity))
-        );
-
+                trade.getExecutionPrice().multiply(BigDecimal.valueOf(trade.getQuantity())));
         recordOhlc(trade);
-
         if (stock != null) {
             stock.updateLastTradedPrice(trade.getExecutionPrice());
         }
+    }
+
+    public static MatchingEngine restore(Stock stock, List<OrderSnapshot> savedOrders,
+                                         List<Trade> savedTrades) {
+        MatchingEngine engine = new MatchingEngine(new OrderBook(), stock);
+        for (OrderSnapshot snapshot : savedOrders) {
+            Order order = Order.restore(snapshot);
+            if (!engine.usedOrderIds.add(order.getOrderId())) {
+                throw new IllegalStateException("Duplicate saved order ID.");
+            }
+            engine.knownOrders.put(order.getOrderId(), order);
+            if (order.isActive()) {
+                if (order.getOrderType() != OrderType.LIMIT) {
+                    throw new IllegalStateException("Unfinished market order requires reconciliation.");
+                }
+                engine.orderBook.addOrder(order);
+            }
+        }
+        Map<Long, Long> filled = new HashMap<>();
+        for (Trade trade : savedTrades) {
+            Order buy = engine.knownOrders.get(trade.getBuyOrderId());
+            Order sell = engine.knownOrders.get(trade.getSellOrderId());
+            if (buy == null || sell == null || buy.getSide() != OrderSide.BUY || sell.getSide() != OrderSide.SELL) {
+                throw new IllegalStateException("Saved trade references invalid orders.");
+            }
+            filled.merge(buy.getOrderId(), (long) trade.getQuantity(), Math::addExact);
+            filled.merge(sell.getOrderId(), (long) trade.getQuantity(), Math::addExact);
+            engine.recordTrade(trade);
+        }
+        for (Order order : engine.knownOrders.values()) {
+            if (filled.getOrDefault(order.getOrderId(), 0L) != order.getFilledQuantity()) {
+                throw new IllegalStateException("Saved fills disagree with trade history.");
+            }
+        }
+        if (engine.orderBook.canMatch()) {
+            throw new IllegalStateException("Saved resting orders cross; recovery must not create trades.");
+        }
+        return engine;
+    }
+
+    public synchronized List<OrderSnapshot> getOrderSnapshots() {
+        return knownOrders.values().stream().map(OrderSnapshot::from).toList();
     }
 
     private void matchMarketOrder(Order marketOrder) {
