@@ -54,6 +54,11 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | `stock.StockEntity` / `StockRepository` | Database stock mapping and JPA queries |
 | `stock.StockService` / `StockController` | Stock registration, validation, and REST endpoints |
 | `stock.StockResponse` | Stock metadata returned by the API |
+| `user.UserEntity` / `UserRepository` | User database mapping and uniqueness queries |
+| `user.UserService` / `UserController` | Validated account registration and safe responses |
+| `user.PasswordConfiguration` | Salted PBKDF2 password encoder |
+| `user.DatabaseUserDetailsService` | Loads credentials and roles for Spring Security |
+| `auth.SecurityConfiguration` / `AuthController` | Session login/logout, CSRF, access rules, and current-user profile |
 
 ```text
 MiniStockExchange/
@@ -100,7 +105,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User accounts, order/trade persistence, trading endpoints, and the web frontend are not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Order/trade persistence, trading endpoints, and the web frontend are not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -148,27 +153,135 @@ Example record:
 {"symbol":"AAPL","companyName":"Apple Inc.","referencePrice":250.0000}
 ```
 
-The table starts empty on a fresh installation; migrations do not automatically seed market prices. Register stocks through the API:
+The table starts empty on a fresh installation; migrations do not automatically seed market prices. Register stocks through the API after following the admin login steps below. These POST examples assume `COOKIE_JAR` and `CSRF_TOKEN` belong to that logged-in admin session:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/stocks \
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST http://localhost:8080/api/stocks \
+  -H "X-CSRF-TOKEN: $CSRF_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"symbol":"AAPL","companyName":"Apple Inc.","referencePrice":345.29}'
 
-curl -i -X POST http://localhost:8080/api/stocks \
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST http://localhost:8080/api/stocks \
+  -H "X-CSRF-TOKEN: $CSRF_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"symbol":"TSLA","companyName":"Tesla, Inc.","referencePrice":401.70}'
 ```
 
 These values were registered in the original local development database using timestamped USD quotes observed on October 28, 2026: [Apple, $345.29 at 11:43 AM EDT](https://stockanalysis.com/stocks/aapl/) and [Tesla, $401.70 at 11:24 AM EDT](https://stockanalysis.com/stocks/tsla/). They are fixed reference-price snapshots, not guaranteed current quotes or a live feed; obtain fresh prices for a new registration. Reposting an existing symbol returns `409` and leaves the saved record unchanged.
 
-Registration is also available through `StockService.registerStock(symbol, companyName, referencePrice)` for application code. Integration tests use their own records in the separate test database and remove only those records afterward. This local-development write endpoint has no authentication yet; access control will be added with the users feature.
+Registration is also available through `StockService.registerStock(symbol, companyName, referencePrice)` for application code. Integration tests use their own records in the separate test database and remove only those records afterward. Stock registration now requires an authenticated `ADMIN` session and a valid CSRF token.
 
 `StockEntity` lives in `com.misho.exchange.stock`, separate from the existing engine `Stock` class. Saved metadata survives application restarts, but saving a stock does not register it in a live `Exchange`, create its matching engine, or persist its last price or order book. That integration is a later step.
 
+## User registration
+
+Flyway V3 creates `exchange.users`, and V4 adds the `role` column without changing the applied V3 migration:
+
+| Column | PostgreSQL type | Rules |
+| --- | --- | --- |
+| `id` | `BIGINT` | Generated primary key |
+| `username` | `VARCHAR(50)` | Required; unique; 3–50 lowercase letters, digits, or underscores |
+| `email` | `VARCHAR(254)` | Required; unique; validated email format |
+| `password_hash` | `VARCHAR(255)` | Required; stores the salted password hash only |
+| `created_at` | `TIMESTAMPTZ` | Required; UTC registration timestamp |
+| `role` | `VARCHAR(10)` | Required; `USER` by default, or explicitly assigned `ADMIN` |
+
+Usernames and emails are trimmed and normalized to lowercase using `Locale.ROOT`; duplicates are therefore case-insensitive. Passwords are preserved exactly, including spaces, and must contain 15–128 characters and not be entirely blank. Email format validation does not verify ownership of an address.
+
+With Spring Boot running, first obtain an anonymous session and CSRF token, then register an example account. These terminal examples use `curl` and Python 3 to extract the JSON token:
+
+```bash
+COOKIE_JAR=$(mktemp)
+CSRF_TOKEN=$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" http://localhost:8080/api/auth/csrf | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+```
+
+Register using that cookie jar and token:
+
+```bash
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST http://localhost:8080/api/users \
+  -H "X-CSRF-TOKEN: $CSRF_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"example_user","email":"example_user@example.test","password":"ExampleOnlyPassword123!"}'
+```
+
+Use a password of your own for an actual account; the example above is demonstration data. `POST /api/users` returns:
+
+- `201 Created` with only `id`, `username`, `email`, `createdAt`, and `role`.
+- `400 Bad Request` for invalid fields or malformed JSON.
+- `409 Conflict` when the username or email is already registered. Database uniqueness constraints also handle concurrent duplicate registrations.
+
+Passwords use Spring Security Crypto’s PBKDF2-HMAC-SHA256 encoder with 600,000 iterations, a random 16-byte salt, and a 256-bit derived key. Stored hashes include the `{pbkdf2-sha256}` algorithm identifier. Identical passwords receive different salts. The encoder is separate from the registration logic, and its `matches` method is available for the future login feature. See [Spring’s encoder API](https://docs.spring.io/spring-security/reference/api/java/org/springframework/security/crypto/password/Pbkdf2PasswordEncoder.html) and [OWASP password storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
+
+Raw passwords and stored hashes are excluded from registration responses. The request type redacts its `toString()` and does not serialize its password; it is not returned as a response. The service validates registration data even when called directly instead of over HTTP.
+
+Registration creates a `USER` account and does not automatically log it in. The request has no role field: submitting `role: "ADMIN"` cannot grant privileges. No user or administrator is created automatically. There is no public users list, email verification, password reset, or registration rate limiting yet. Integration tests use temporary accounts in the separate test database and remove only their own records.
+
+## Login and access control
+
+Authentication uses Spring Security’s session-based form login. There are no JWTs. The database stores users and password hashes; the server stores the logged-in session in memory.
+
+| Endpoint | Access / format |
+| --- | --- |
+| `GET /api/health` | Public |
+| `GET /api/stocks` and `/api/stocks/{symbol}` | Public |
+| `GET /api/auth/csrf` | Public; returns the token and header name and creates a session when needed |
+| `POST /api/users` | Public registration; JSON body and valid CSRF token required |
+| `POST /api/auth/login` | Public; form-encoded `username` and `password`, plus CSRF token |
+| `GET /api/auth/me` | Authenticated user; safe profile including role |
+| `POST /api/auth/logout` | CSRF-protected logout; returns `204` |
+| `POST /api/stocks` | Authenticated `ADMIN` plus CSRF token |
+
+After obtaining `COOKIE_JAR` and `CSRF_TOKEN` as shown in registration, log in with the example account:
+
+```bash
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -H "X-CSRF-TOKEN: $CSRF_TOKEN" \
+  --data-urlencode 'username=example_user' \
+  --data-urlencode 'password=ExampleOnlyPassword123!' \
+  http://localhost:8080/api/auth/login
+```
+
+Login accepts a username, not an email address. It normalizes username case and surrounding whitespace but preserves the password exactly. The response is safe user metadata on success, or a generic `401` for incorrect credentials. Form fields are used here so Spring Security’s standard authentication filter handles password checking, session fixation protection, and CSRF token rotation.
+
+Login rotates the session ID and invalidates the previous CSRF token. Keep the updated cookie jar and fetch a new token before any further write:
+
+```bash
+CSRF_TOKEN=$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" http://localhost:8080/api/auth/csrf | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+curl -i -b "$COOKIE_JAR" http://localhost:8080/api/auth/me
+```
+
+Anonymous access to protected endpoints returns `401`, and a logged-in `USER` attempting stock registration receives `403`. A missing, invalid, or stale CSRF token also returns `403`, even on public write endpoints. Public reads do not require a token. Requests use the `X-CSRF-TOKEN` header returned by the token endpoint.
+
+Log out with the current session and token:
+
+```bash
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -H "X-CSRF-TOKEN: $CSRF_TOKEN" \
+  -X POST http://localhost:8080/api/auth/logout
+rm "$COOKIE_JAR"
+```
+
+Logout invalidates the session, clears its authentication and CSRF token, and expires the session cookie. It cannot be triggered by GET. Fetch a fresh anonymous token before registering or logging in again.
+
+### Assigning an administrator
+
+The first registered user is not automatically an administrator, and there is no public role-management endpoint. An operator with authorized database access must explicitly promote an existing account. Connect to the development database as its owner and deliberately run:
+
+```sql
+UPDATE exchange.users SET role = 'ADMIN' WHERE username = 'example_user';
+```
+
+Then log out and log in again before registering stocks. Authorities are captured at login; manually changing a database role does not refresh an existing session. Use explicit operator control for demotion and terminate affected sessions when immediate revocation is needed; there is no runtime role-management feature yet.
+
+### Session behavior
+
+The session cookie is HttpOnly and SameSite=Lax, and sessions expire after 30 minutes of inactivity. URL-based session tracking and HTTP Basic authentication are disabled. Sessions are not persisted across server restarts, so users must log in again afterward; their database accounts remain saved. The frontend is expected to use the session cookie and CSRF-token endpoint.
+
+Local development uses HTTP. For HTTPS deployment, set `SESSION_COOKIE_SECURE=true` to require secure cookies. Keep the application local until deployment controls, login throttling, email verification, and the frontend integration are addressed. Cross-origin frontend access is not configured in this step.
+
 ## PostgreSQL setup
 
-PostgreSQL 17 must be running locally before starting Spring Boot or running the Spring integration tests. There is no H2 fallback. Flyway creates the `exchange` schema and `stocks` table. Stock metadata can be stored and retrieved through JPA; users, orders, and trades are not stored yet. The matching engine still runs in memory.
+PostgreSQL 17 must be running locally before starting Spring Boot or running the Spring integration tests. There is no H2 fallback. Flyway creates the `exchange` schema plus `stocks` and `users` tables. Stock metadata and registered users are stored through JPA; orders and trades are not stored yet. The matching engine still runs in memory.
 
 For a new local setup, connect as a PostgreSQL administrator:
 
@@ -196,7 +309,7 @@ chmod 600 .env
 
 `.env` and other local `.env.*` files are ignored by Git; `.env.example` contains placeholders only. Do not put passwords in committed properties files. On the original development machine these databases and a private `.env` have already been created, so do not recreate them or overwrite that file.
 
-Flyway runs `src/main/resources/db/migration/V1__initialize_exchange_schema.sql` on first startup and records it in `public.flyway_schema_history`. Later starts validate previously applied migrations and run only new ones. V1 creates the `exchange` schema and V2 creates its `stocks` table. Later tables will use new versioned migrations. Do not edit migrations after they have been applied.
+Flyway runs `src/main/resources/db/migration/V1__initialize_exchange_schema.sql` on first startup and records it in `public.flyway_schema_history`. Later starts validate previously applied migrations and run only new ones. V1 creates the `exchange` schema, V2 creates `stocks`, V3 creates `users`, and V4 adds user roles. Later tables will use new versioned migrations. Do not edit migrations after they have been applied.
 
 Hibernate uses `ddl-auto=validate`; it will not silently create or update tables. Open Session in View is disabled. The Flyway clean operation is disabled as well.
 
@@ -342,7 +455,7 @@ mvn test
 mvn -Dtest=ConsoleDashboardTest test
 ```
 
-Spring integration tests use the `test` profile and the dedicated `DB_TEST_URL` database. They verify real PostgreSQL connectivity, Flyway migration history, a Hibernate query, the HTTP health endpoint, stock constraints, registration/read endpoints, malformed payload rejection, concurrent duplicate rejection, and stock persistence after closing and restarting the application. Core matching and console tests remain independent of the database.
+Spring integration tests use the `test` profile and the dedicated `DB_TEST_URL` database. They verify real PostgreSQL connectivity, Flyway migration history, a Hibernate query, the HTTP health endpoint, stock constraints, registration/read endpoints, malformed payload rejection, concurrent duplicate rejection, and stock persistence after closing and restarting the application. User registration tests cover validation, case-insensitive duplicates, concurrent username/email collisions, salted hashing and password matching, safe responses, and request redaction. Authentication tests cover anonymous/USER/ADMIN access, failed login, session ID rotation, CSRF validation and rotation, privilege-escalation attempts, logout, and replay of invalidated sessions. Core matching and console tests remain independent of the database.
 
 The test suite covers matching, FIFO priority, partial fills, cancellation, duplicate IDs, amendment priority, multi-stock isolation, market orders, lifecycle status, indexed lookup, depth, analytics, OHLC boundaries, price changes, simulator lifecycle, symbol normalization, and dashboard rendering and terminal cleanup.
 
@@ -352,7 +465,7 @@ Surefire writes results to `target/surefire-reports/`. Concurrency tests validat
 
 ## Scope and limitations
 
-This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, but no persistent user/order/trade models, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
+This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, plus user registration and session authentication, but no persistent order/trade models, web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
 
 Register stocks before concurrent trading begins. Use one engine per initially empty book, and interact through the engine during concurrent activity. Do not share submitted order instances across engines, mutate submitted orders, or access their books directly. Returned open orders are live objects, not immutable snapshots; use market snapshots for consistent concurrent statistics. Separate getter calls are independent observations.
 

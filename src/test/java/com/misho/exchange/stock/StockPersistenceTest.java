@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.misho.exchange.MiniStockExchangeApplication;
+import com.misho.exchange.support.ApiTestClient;
+import com.misho.exchange.user.RegisterUserRequest;
+import com.misho.exchange.user.UserService;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -49,6 +52,12 @@ class StockPersistenceTest {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private UserService users;
+
+    private ApiTestClient adminClient;
+    private String adminUsername;
+
     private final List<String> createdSymbols = new ArrayList<>();
 
     private String symbol() {
@@ -61,6 +70,9 @@ class StockPersistenceTest {
     @AfterEach
     void removeOnlyThisTestsStocks() {
         repository.deleteAllByIdInBatch(createdSymbols);
+        if (adminUsername != null) {
+            jdbc.update("DELETE FROM exchange.users WHERE username = ?", adminUsername);
+        }
     }
 
     @Test
@@ -213,11 +225,20 @@ class StockPersistenceTest {
         }
     }
 
+    private synchronized ApiTestClient admin() throws Exception {
+        if (adminClient == null) {
+            adminUsername = "admin_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            String password = "StockTestAdminPassword123!";
+            users.registerUser(new RegisterUserRequest(adminUsername, adminUsername + "@example.test", password));
+            jdbc.update("UPDATE exchange.users SET role = 'ADMIN' WHERE username = ?", adminUsername);
+            adminClient = new ApiTestClient(port, json);
+            assertEquals(200, adminClient.login(adminUsername, password).statusCode());
+        }
+        return adminClient;
+    }
+
     private HttpResponse<String> post(String body) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/stocks"))
-                .timeout(Duration.ofSeconds(5)).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        return admin().postJson("/api/stocks", body);
     }
 
     private HttpResponse<String> get(String path) throws Exception {
