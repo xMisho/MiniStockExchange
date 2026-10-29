@@ -109,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`; trading HTTP endpoints and the web frontend are not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints are implemented; the web frontend is not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -175,7 +175,7 @@ These values were registered in the original local development database using ti
 
 Registration is also available through `StockService.registerStock(symbol, companyName, referencePrice)` for application code. Integration tests use their own records in the separate test database and remove only those records afterward. Stock registration now requires an authenticated `ADMIN` session and a valid CSRF token.
 
-`StockEntity` lives in `com.misho.exchange.stock`, separate from the existing engine `Stock` class. Saved metadata survives application restarts, but saving a stock does not register it in a live `Exchange`, create its matching engine, or persist its last price or order book. That integration is a later step.
+`StockEntity` lives in `com.misho.exchange.stock`, separate from the existing engine `Stock` class. Saved metadata survives application restarts. The persistent trading service restores registered markets at startup and loads newly registered stocks on their first trading operation. Last price and book state are reconstructed from durable orders and trades. The standalone console `Exchange` remains independent.
 
 ## User registration
 
@@ -285,7 +285,7 @@ Local development uses HTTP. For HTTPS deployment, set `SESSION_COOKIE_SECURE=tr
 
 ## Orders, trades, and persistent matching
 
-The database model and `TradingService` are implemented, including staged matching, failure recovery, and startup restoration. Trading HTTP endpoints are still Step 3. The standalone console simulator remains an independent in-memory demo and does not write orders or trades to PostgreSQL.
+The database model and `TradingService` are implemented, including staged matching, failure recovery, and startup restoration. Authenticated trading HTTP endpoints are implemented for submission, owned history, lookup, amendment, and cancellation. The standalone console simulator remains an independent in-memory demo and does not write orders or trades to PostgreSQL.
 
 Flyway V5 creates `exchange.orders`, `exchange.trades`, and an order-priority sequence. Stock links use `stock_symbol`, referencing the existing `stocks.symbol` primary key; there is no separate numeric stock ID. Database order IDs are global across stocks and are intended to become the engine order IDs in the later integration.
 
@@ -332,7 +332,7 @@ Foreign keys retain history: users, stocks, and referenced orders cannot be dele
 
 ### Transaction and engine consistency
 
-`TradingService` is the only supported coordinator for persisted trading. It supports submission, cancellation, amendment, owned order history, market snapshots, trade history, and candle reads as Java service methods. No trading controllers were added in this step. Later controllers must derive the actor ID from the authenticated user rather than trust a client-supplied owner ID.
+`TradingService` is the only supported coordinator for persisted trading. It supports submission, cancellation, amendment, owned order history, market snapshots, trade history, and candle reads as Java service methods. Trading controllers derive the actor ID from the authenticated session user; client-supplied owner IDs are never used for authorization.
 
 Each mutation follows this sequence:
 
@@ -344,7 +344,7 @@ Each mutation follows this sequence:
 
 A SQL rollback does not undo Java memory. Staging avoids mutating the published engine in the first place. On a runtime failure, the service discards the candidate and attempts to reconstruct the market from the actual committed database state. It does not assume that a transaction error means PostgreSQL rolled back: commit may already have succeeded.
 
-If reconciliation succeeds, the recovered engine is published and the original operation still reports a failure. **Inspect durable order history before retrying a failed operation**, especially after a commit/publication error. The service does not automatically retry commands and does not yet offer request-idempotency keys. A committed operation can therefore exist even when its caller received an exception; Step 3 must make this behavior explicit at the HTTP boundary.
+If reconciliation succeeds, the recovered engine is published and the original operation still reports a failure. **Inspect durable order history before retrying a failed operation**, especially after a commit/publication error. The service does not automatically retry commands and does not yet offer request-idempotency keys. A committed operation can therefore exist even when its caller received an exception; The HTTP boundary reports this as `503` with `TRADING_OUTCOME_UNCERTAIN` and `retrySafe: false`.
 
 If reconciliation fails, that market’s cached engine is removed and its trading/snapshot operations remain blocked until explicit `recoverMarket(symbol)` succeeds or the application restarts successfully. Durable order-history reads remain available when the database is accessible. Unknown symbols are ordinary input errors and do not permanently disable a subsequently registered stock.
 
@@ -362,9 +362,45 @@ The Step 2.5 test starts a fresh application context, verifies the restored book
 
 This is intentionally a **single-active-backend** design. Do not run multiple backend writers against one live market: the advisory transaction lock serializes participating database transactions, but it does not keep independently cached engines in different application instances synchronized. Direct repository/SQL changes to order/trade records bypass the coordinator and are unsupported during trading, apart from deliberate maintenance followed by recovery.
 
-Candidate reconstruction currently reads the complete market history for each mutation. That is simple and testable for this learning project, but it is not intended for high-volume production workloads. Sessions, the standalone `Exchange`, and the console simulator remain separate concerns; future web trading must route through `TradingService`.
+Candidate reconstruction currently reads the complete market history for each mutation. That is simple and testable for this learning project, but it is not intended for high-volume production workloads. Sessions, the standalone `Exchange`, and the console simulator remain separate concerns; web trading routes through `TradingService`.
 
-Normal users can view and manage their own orders through the service. Admins can inspect, amend, or cancel another user’s orders as an explicit operator override; ownership remains unchanged. The HTTP endpoints and their authorization/error/idempotency contracts remain Step 3.
+Normal users can view and manage their own orders through the service. Admins can inspect, amend, or cancel another user’s orders as an explicit operator override; ownership remains unchanged. The HTTP endpoints enforce these ownership and admin rules. Request idempotency is not implemented.
+
+## Trading API
+
+All trading routes require a session login. POST, PATCH, and DELETE also require the CSRF token obtained from `/api/auth/csrf`; refresh that token after login. Requests use JSON, and responses contain order data rather than JPA entities or credentials.
+
+| Method | Route | Success |
+| --- | --- | --- |
+| POST | `/api/stocks/{symbol}/orders` | `201` with the resulting order and a `Location` header |
+| GET | `/api/orders/me` | `200` with the current user's order history, including terminal orders |
+| GET | `/api/orders/{id}` | `200` with an owned order; admins may inspect any order |
+| PATCH | `/api/orders/{id}` | `204` after amendment and any resulting matching |
+| DELETE | `/api/orders/{id}` | `204` after cancellation |
+
+Submit a limit order:
+
+```json
+{"side":"BUY","type":"LIMIT","limitPrice":100.00,"quantity":5}
+```
+
+Submit a market order (omit `limitPrice` or use null):
+
+```json
+{"side":"BUY","type":"MARKET","quantity":5}
+```
+
+Amend an open limit order:
+
+```json
+{"newPrice":101.00,"newRemainingQuantity":3}
+```
+
+The database generates order IDs. Ownership comes from the login session. Ordinary users can inspect, amend, and cancel only their own orders; admins may manage another user's order without changing its owner. `/api/orders/me` always lists only the caller's orders, including for admins. Amendment preserves the existing FIFO rules and may execute trades immediately. Market orders execute against available liquidity and cancel any unfilled remainder.
+
+Error responses: `400` for invalid requests, `401` for missing authentication, `403` for ownership violations or invalid/missing CSRF, `404` for unknown stocks/orders, and `409` for amending or cancelling a terminal order. Invalid requests do not intentionally modify the book. State changes are checked again by the service if another command completes between HTTP checks and mutation.
+
+A `503` mutation response with `code: TRADING_OUTCOME_UNCERTAIN` and `retrySafe: false` means the database may already have committed. **Check `/api/orders/me` and the relevant order before retrying.** No automatic retries or idempotency keys are provided, and a lost HTTP response can also conceal a successful operation. If durable history cannot be read, wait for recovery rather than blindly resubmitting. An unavailable market also returns `503` without exposing internal error details.
 
 ## PostgreSQL setup
 

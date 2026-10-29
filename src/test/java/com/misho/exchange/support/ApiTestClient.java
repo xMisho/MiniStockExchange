@@ -60,6 +60,15 @@ public class ApiTestClient {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    public HttpResponse<String> changeJson(String method, String path, String body, boolean withCsrf)
+            throws Exception {
+        ensureCsrf();
+        var request = builder(path).header("Content-Type", "application/json");
+        if (withCsrf) { request.header(csrfHeader, csrfToken); }
+        return client.send(request.method(method, HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     public HttpResponse<String> login(String username, String password) throws Exception {
         ensureCsrf();
         String body = "username=" + URLEncoder.encode(username, StandardCharsets.UTF_8)

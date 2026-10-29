@@ -24,7 +24,10 @@ public class SecurityConfiguration {
                                 "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/stocks/*/orders").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/orders/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/orders/*").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) -> {

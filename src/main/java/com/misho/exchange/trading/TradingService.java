@@ -131,7 +131,7 @@ public class TradingService {
     public synchronized PersistedOrder getOrder(Long actorId, long orderId) {
         return transaction(() -> {
             UserEntity actor = actor(actorId);
-            var row = orders.findById(orderId).orElseThrow(() -> new IllegalArgumentException("Order not found."));
+            var row = orders.findById(orderId).orElseThrow(() -> new OrderNotFoundException());
             authorize(actor, row);
             return PersistedOrder.from(row);
         });
