@@ -22,6 +22,14 @@ class MarketLoader {
         this.trades = trades;
     }
 
+    LoadedMarket forCommand(String symbol, MatchingEngine engine) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Trading preparation requires a database transaction.");
+        }
+        var stock = stocks.findById(symbol).orElseThrow(UnknownMarketException::new);
+        return new LoadedMarket(stock, new LinkedHashMap<>(), engine, engine.getTradeCount());
+    }
+
     LoadedMarket load(String symbol) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Recovery requires a database transaction.");

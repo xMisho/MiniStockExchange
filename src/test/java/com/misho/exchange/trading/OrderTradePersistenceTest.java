@@ -214,7 +214,7 @@ class OrderTradePersistenceTest {
         UserEntity other = newUser();
         orders.saveAndFlush(new OrderEntity(other, stock(), OrderSide.SELL, OrderType.LIMIT,
                 BigDecimal.TEN, 5, orders.nextPrioritySequence(), CREATED));
-        assertEquals(List.of(mine.getId()), orders.findByUser_IdOrderByIdAsc(owner().getId())
+        assertEquals(List.of(mine.getId()), orders.findByUser_Id(owner().getId(), org.springframework.data.domain.PageRequest.of(0, 25))
                 .stream().map(OrderEntity::getId).toList());
     }
 

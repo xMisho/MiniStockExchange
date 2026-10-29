@@ -61,7 +61,7 @@ Concurrent operations are serialized by each matching engine’s `synchronized` 
 | `auth.SecurityConfiguration` / `AuthController` | Session login/logout, CSRF, access rules, and current-user profile |
 | `trading.OrderEntity` / `OrderRepository` | Owned order snapshots, FIFO sequencing, and optimistic locking |
 | `trading.TradeEntity` / `TradeRepository` | Persistent execution records and history queries |
-| `trading.TradingService` | Service-owned transactions, staged matching, ownership, and recovery |
+| `trading.TradingService` | Service-owned transactions, locked live-engine matching, ownership, and recovery |
 | `trading.MarketLoader` / `MarketRegistry` | Validated restoration and publication of committed engines |
 
 ```text
@@ -285,7 +285,7 @@ Local development uses HTTP. For HTTPS deployment, set `SESSION_COOKIE_SECURE=tr
 
 ## Orders, trades, and persistent matching
 
-The database model and `TradingService` are implemented, including staged matching, failure recovery, and startup restoration. Authenticated trading HTTP endpoints are implemented for submission, owned history, lookup, amendment, and cancellation. The standalone console simulator remains an independent in-memory demo and does not write orders or trades to PostgreSQL.
+The database model and `TradingService` are implemented, including locked live-engine matching, failure recovery, and startup restoration. Authenticated trading HTTP endpoints are implemented for submission, owned history, lookup, amendment, and cancellation. The standalone console simulator remains an independent in-memory demo and does not write orders or trades to PostgreSQL.
 
 Flyway V5 creates `exchange.orders`, `exchange.trades`, and an order-priority sequence. Stock links use `stock_symbol`, referencing the existing `stocks.symbol` primary key; there is no separate numeric stock ID. Database order IDs are global across stocks and are intended to become the engine order IDs in the later integration.
 
@@ -338,17 +338,19 @@ Each mutation follows this sequence:
 
 1. Hold the service’s synchronization monitor through preparation, matching, transaction completion, and publication.
 2. Open a service-owned database transaction and acquire a PostgreSQL advisory transaction lock, with a five-second lock-wait limit.
-3. Rebuild a **private candidate engine** from committed order/trade records. Persist a new order ID when submitting, then mutate only that candidate.
-4. Save updated quantities, statuses, prices, FIFO sequences, and every new trade in the same transaction. Flush and commit.
-5. Publish the candidate engine only after commit has returned successfully. Readers acquire the same service monitor, so they cannot observe the uncommitted candidate.
+3. Reuse the service-owned engine, loading it from PostgreSQL only on a cache miss. Persist a new order ID when submitting, then apply the command while keeping the service monitor held.
+4. Collect only the command's target and counterparties from newly created trades. Fetch those managed order rows, update their quantities/status/price/FIFO priority, and persist only new trades. Flush and commit without copying or scanning historical engine orders/trades.
+5. Publish the successful engine while still holding the monitor. Readers acquire the same monitor, so they cannot observe temporary uncommitted engine mutations.
 
-A SQL rollback does not undo Java memory. Staging avoids mutating the published engine in the first place. On a runtime failure, the service discards the candidate and attempts to reconstruct the market from the actual committed database state. It does not assume that a transaction error means PostgreSQL rolled back: commit may already have succeeded.
+A SQL rollback does not undo Java memory. On a runtime failure or an error, the service replaces the mutated engine by reconstructing the market from the actual committed database state before releasing its monitor. If recovery fails, the engine is removed and the market is blocked. Errors are rethrown after reconciliation is attempted. Process termination or resource exhaustion can prevent in-process recovery; startup recovery is still required. A transaction error does not prove PostgreSQL rolled back: commit may already have succeeded.
+
+The invariant is: **outside the service monitor, every available engine reflects committed database state**. Engine references are private to the internal registry and are never returned by `TradingService`; snapshot/history results are immutable. All persisted trading must pass through this service. The engine's own monitor alone does not protect the longer database transaction.
 
 If reconciliation succeeds, the recovered engine is published and the original operation still reports a failure. **Inspect durable order history before retrying a failed operation**, especially after a commit/publication error. The service does not automatically retry commands and does not yet offer request-idempotency keys. A committed operation can therefore exist even when its caller received an exception; The HTTP boundary reports this as `503` with `TRADING_OUTCOME_UNCERTAIN` and `retrySafe: false`.
 
 If reconciliation fails, that market’s cached engine is removed and its trading/snapshot operations remain blocked until explicit `recoverMarket(symbol)` succeeds or the application restarts successfully. Durable order-history reads remain available when the database is accessible. Unknown symbols are ordinary input errors and do not permanently disable a subsequently registered stock.
 
-The service rejects calls made inside an existing database transaction: an outer rollback must not undo records after a candidate has already been published. Database optimistic versions remain a guard against stale updates. A checked integer addition also prevents cumulative fill counts from silently wrapping after repeated amendments.
+The service rejects calls made inside an existing database transaction: an outer rollback must not undo records after the engine has already been made available. Database optimistic versions remain a guard against stale updates. A checked integer addition also prevents cumulative fill counts from silently wrapping after repeated amendments.
 
 ### Startup and restart recovery
 
@@ -356,15 +358,37 @@ The application-ready listener restores all registered stocks from PostgreSQL be
 
 Recovery rejects unfinished MARKET orders, crossed resting books, invalid saved trade references, and fill totals that disagree with trade history. It does not silently cancel corrupt records, invent executions, or discard history. Startup fails if saved market state cannot be restored; operators must investigate the data before serving persisted trading.
 
-The Step 2.5 test starts a fresh application context, verifies the restored book and analytics, then submits another order to prove the saved FIFO priority actually controls its fills. Other tests inject failures after candidate matching, during trade persistence, immediately before commit, after commit, and during publication/recovery. They also check blocked readers during commit, rollback of amendments/cancellations, ownership checks, admin overrides, and concurrent commands.
+The Step 2.5 test starts a fresh application context, verifies the restored book and analytics, then submits another order to prove the saved FIFO priority actually controls its fills. Other tests inject failures after live-engine matching, during trade persistence, immediately before commit, after commit, and during publication/recovery. They also check blocked readers during commit, rollback of amendments/cancellations, ownership checks, admin overrides, and concurrent commands.
 
 ### Current integration boundaries
 
 This is intentionally a **single-active-backend** design. Do not run multiple backend writers against one live market: the advisory transaction lock serializes participating database transactions, but it does not keep independently cached engines in different application instances synchronized. Direct repository/SQL changes to order/trade records bypass the coordinator and are unsupported during trading, apart from deliberate maintenance followed by recovery.
 
-Candidate reconstruction currently reads the complete market history for each mutation. That is simple and testable for this learning project, but it is not intended for high-volume production workloads. Sessions, the standalone `Exchange`, and the console simulator remain separate concerns; web trading routes through `TradingService`.
+Normal writes fetch only metadata and affected orders and persist the command's delta. Full history reconstruction is reserved for startup, cache misses, explicit recovery, and failures. Engine history still consumes growing memory; full-history read APIs and recovery still scale with history size. Matching a large order can still touch many counterparties, and queue removal can scan a price level. This is not a claim of constant-time matching or production throughput. Sessions, the standalone `Exchange`, and the console simulator remain separate concerns; web trading routes through `TradingService`.
 
 Normal users can view and manage their own orders through the service. Admins can inspect, amend, or cancel another user’s orders as an explicit operator override; ownership remains unchanged. The HTTP endpoints enforce these ownership and admin rules. Request idempotency is not implemented.
+
+### Reproducible persistence benchmark
+
+At 20,000 historical orders and 10,000 trades, local median resting-order submission dropped from **176.4 ms to 1.2 ms**, and executing market submission dropped from **179.1 ms to 6.9 ms** after replacing per-command history reconstruction with delta persistence.
+
+The opt-in benchmark uses the isolated test database and deletes only its own fixtures. Each size contains 100, 1,000, or 10,000 historical trades and twice as many filled orders. It times resting submission, priority-losing amendment, cancellation, and an executing market submission. Each case uses five warmup cycles and ten measured cycles; setup, initial recovery, and fixture cleanup are outside the timings. Run separately from other test/database workloads:
+
+```bash
+./mvnw -Dtest=TradingBenchmarkTest -Dtrading.benchmark=true test
+```
+
+Local comparison on 2026-10-29 (same fixture and ten-sample procedure; baseline code at `5dee98c`). Median latency in milliseconds:
+
+| Historical orders / trades | Resting submit before → after | Amendment before → after | Cancellation before → after | Executing market submit before → after |
+| --- | --- | --- | --- | --- |
+| 200 / 100 | 8.459 → 2.358 | 8.773 → 3.843 | 8.474 → 3.452 | 10.039 → 5.324 |
+| 2,000 / 1,000 | 24.089 → 1.172 | 24.489 → 1.951 | 21.309 → 1.927 | 25.585 → 2.763 |
+| 20,000 / 10,000 | 176.371 → 1.159 | 166.812 → 4.271 | 154.125 → 3.909 | 179.097 → 6.939 |
+
+At the largest size, mean latency changed from 176.914 → 1.179 ms for resting submit, 167.114 → 4.291 ms for amendment, 155.406 → 3.918 ms for cancellation, and 180.811 → 7.107 ms for executing market submit. These short sequential runs demonstrate the removed history replay cost; differences between optimized fixture sizes also reflect warmup/cache/machine effects, so they do not establish a scaling curve or throughput SLA.
+
+It prints median and mean milliseconds for each operation. Ordinary regression runs skip the benchmark unless explicitly enabled. Results are local diagnostic measurements, not a production capacity guarantee; logging, JIT compilation, database cache, and machine load affect timing.
 
 ## Trading API
 

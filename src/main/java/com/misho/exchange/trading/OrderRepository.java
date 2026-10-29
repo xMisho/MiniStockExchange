@@ -19,8 +19,6 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
     @EntityGraph(attributePaths = {"user", "stock"})
     List<OrderEntity> findByStock_SymbolOrderByPrioritySequenceAsc(String symbol);
 
-    List<OrderEntity> findByUser_IdOrderByIdAsc(Long userId);
-
     @EntityGraph(attributePaths = {"user", "stock"})
     Page<OrderEntity> findByUser_Id(Long userId, Pageable pageable);
 

@@ -16,6 +16,7 @@ import com.misho.exchange.user.UserRole;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.NavigableMap;
@@ -73,7 +74,7 @@ public class TradingService {
                 return result;
             });
             registry.replaceAll(restored);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | Error exception) {
             registry.markAllUnavailable();
             throw exception;
         }
@@ -106,7 +107,8 @@ public class TradingService {
         String symbol = orderSymbol(actorId, orderId);
         if (symbol == null) { return false; }
         return change(symbol, market -> {
-            var row = market.orders().get(orderId);
+            var row = orders.findById(orderId).orElseThrow(OrderNotFoundException::new);
+            market.orders().put(orderId, row);
             authorize(actor(actorId), row);
             boolean cancelled = market.engine().cancelOrder(orderId);
             return new Change(row, row.getPrioritySequence(), cancelled);
@@ -117,7 +119,8 @@ public class TradingService {
         String symbol = orderSymbol(actorId, orderId);
         if (symbol == null) { return false; }
         return change(symbol, market -> {
-            var row = market.orders().get(orderId);
+            var row = orders.findById(orderId).orElseThrow(OrderNotFoundException::new);
+            market.orders().put(orderId, row);
             authorize(actor(actorId), row);
             if (row.getStatus() == OrderStatus.FILLED || row.getStatus() == OrderStatus.CANCELLED) {
                 return new Change(row, row.getPrioritySequence(), false);
@@ -137,13 +140,6 @@ public class TradingService {
             var row = orders.findById(orderId).orElseThrow(() -> new OrderNotFoundException());
             authorize(actor, row);
             return PersistedOrder.from(row);
-        });
-    }
-
-    public synchronized List<PersistedOrder> getOrders(Long actorId) {
-        return transaction(() -> {
-            actor(actorId);
-            return orders.findByUser_IdOrderByIdAsc(actorId).stream().map(PersistedOrder::from).toList();
         });
     }
 
@@ -180,7 +176,7 @@ public class TradingService {
         } catch (UnknownMarketException exception) {
             registry.forget(canonical);
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | Error exception) {
             registry.markUnavailable(canonical);
             throw exception;
         }
@@ -190,8 +186,9 @@ public class TradingService {
         requireNoOuterTransaction();
         registry.requireAvailable(symbol);
         try {
+            MatchingEngine engine = market(symbol);
             Pending pending = transaction(() -> {
-                LoadedMarket market = loader.load(symbol);
+                LoadedMarket market = loader.forCommand(symbol, engine);
                 Change change = action.apply(market);
                 persist(market, change);
                 return new Pending(market.engine(), new Result(PersistedOrder.from(change.row()), change.changed()));
@@ -201,21 +198,34 @@ public class TradingService {
         } catch (UnknownMarketException exception) {
             registry.forget(symbol);
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | Error exception) {
             try { recoverMarket(symbol); }
-            catch (RuntimeException recoveryFailure) { exception.addSuppressed(recoveryFailure); }
-            if (exception instanceof IllegalArgumentException || exception instanceof AccessDeniedException) {
-                throw exception;
-            }
+            catch (RuntimeException | Error recoveryFailure) { exception.addSuppressed(recoveryFailure); }
+            if (exception instanceof Error error) { throw error; }
+            if (exception instanceof IllegalArgumentException argument) { throw argument; }
+            if (exception instanceof AccessDeniedException denied) { throw denied; }
             throw new TradingOperationException(exception);
         }
     }
 
     private void persist(LoadedMarket market, Change change) {
+        var newTrades = market.engine().getTradesSince(market.previousTradeCount());
+        var affectedIds = new LinkedHashSet<Long>();
+        affectedIds.add(change.row().getId());
+        for (Trade trade : newTrades) {
+            affectedIds.add(trade.getBuyOrderId());
+            affectedIds.add(trade.getSellOrderId());
+        }
+        var missingIds = affectedIds.stream().filter(id -> !market.orders().containsKey(id)).toList();
+        orders.findAllById(missingIds).forEach(row -> market.orders().put(row.getId(), row));
         Instant now = Instant.now();
-        for (OrderSnapshot snapshot : market.engine().getOrderSnapshots()) {
-            OrderEntity row = market.orders().get(snapshot.id());
-            long priority = row.getId().equals(change.row().getId()) ? change.priority() : row.getPrioritySequence();
+        for (Long id : affectedIds) {
+            OrderSnapshot snapshot = market.engine().getOrderSnapshot(id);
+            OrderEntity row = market.orders().get(id);
+            if (snapshot == null || row == null || !row.getStock().getSymbol().equals(market.stock().getSymbol())) {
+                throw new IllegalStateException("Affected order is missing or belongs to another market.");
+            }
+            long priority = id.equals(change.row().getId()) ? change.priority() : row.getPrioritySequence();
             if (row.getStatus() != snapshot.status() || row.getRemainingQuantity() != snapshot.remainingQuantity()
                     || row.getFilledQuantity() != snapshot.filledQuantity() || !Objects.equals(row.getLimitPrice(), snapshot.price())
                     || priority != row.getPrioritySequence()) {
@@ -223,12 +233,11 @@ public class TradingService {
                         priority, now.isBefore(row.getUpdatedAt()) ? row.getUpdatedAt() : now);
             }
         }
-        var history = market.engine().getTradeHistory();
-        var newTrades = history.subList(market.previousTradeCount(), history.size()).stream()
+        var executions = newTrades.stream()
                 .map(trade -> new TradeEntity(market.orders().get(trade.getBuyOrderId()),
                         market.orders().get(trade.getSellOrderId()), trade.getExecutionPrice(),
                         trade.getQuantity(), Instant.ofEpochMilli(trade.getTimestamp()))).toList();
-        trades.saveAllAndFlush(newTrades);
+        trades.saveAllAndFlush(executions);
     }
 
     private MatchingEngine market(String symbol) {

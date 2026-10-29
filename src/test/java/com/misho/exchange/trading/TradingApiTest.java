@@ -219,6 +219,7 @@ class TradingApiTest {
     void committedButFailedPublicationWarnsAgainstRetryAndKeepsDurableHistoryReadable() throws Exception {
         stock();
         var owner = user(false);
+        trading.getMarketSnapshot(symbol);
         doThrow(new IllegalStateException("internal failure must not leak")).doCallRealMethod()
                 .when(registry).publish(eq(symbol), any());
         var result = owner.postJson("/api/stocks/" + symbol + "/orders", order("BUY", "99", 5));

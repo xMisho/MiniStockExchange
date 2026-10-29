@@ -12,6 +12,11 @@ import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 import com.misho.exchange.MatchingEngine;
 import com.misho.exchange.MiniStockExchangeApplication;
@@ -114,6 +119,90 @@ class TradingServiceTest {
     }
 
     @Test
+    void successfulCommandsReuseEngineWithoutLoadingHistoricalRowsOrCopyingHistory() {
+        PersistedOrder resting = limit(OrderSide.SELL, "100", 10);
+        MatchingEngine live = spy(registry.get(symbol()));
+        registry.publish(symbol(), live);
+        clearInvocations(loader, trades, live);
+        var untouched = limit(OrderSide.BUY, "90", 3);
+        var incoming = limit(OrderSide.BUY, "100", 2);
+        assertTrue(service.amendOrder(owner(), untouched.id(), new BigDecimal("91"), 4));
+        assertTrue(service.cancelOrder(owner(), untouched.id()));
+        assertSame(live, registry.get(symbol()));
+        assertEquals(8, service.getOrder(owner(), resting.id()).remainingQuantity());
+        assertEquals(OrderStatus.FILLED, service.getOrder(owner(), incoming.id()).status());
+        verify(loader, never()).load(symbol());
+        verify(trades, never()).findByStock_SymbolOrderByIdAsc(symbol());
+        verify(live, never()).getOrderSnapshots();
+        verify(live, never()).getTradeHistory();
+    }
+
+    @Test
+    void deltaMatchingDoesNotUpdateUnrelatedRowsAndReturnsImmutableSnapshots() {
+        var untouched = limit(OrderSide.BUY, "90", 7);
+        var first = limit(OrderSide.SELL, "100", 3);
+        var second = limit(OrderSide.SELL, "101", 4);
+        var before = registry.get(symbol()).getOrderSnapshot(first.id());
+        var buy = limit(OrderSide.BUY, "105", 5);
+        assertEquals(untouched, service.getOrder(owner(), untouched.id()));
+        assertEquals(3, before.remainingQuantity());
+        assertEquals(0, service.getOrder(owner(), first.id()).remainingQuantity());
+        assertEquals(2, service.getOrder(owner(), second.id()).remainingQuantity());
+        assertEquals(5, service.getOrder(owner(), buy.id()).filledQuantity());
+        var delta = registry.get(symbol()).getTradesSince(0);
+        assertEquals(2, delta.size());
+        assertThrows(UnsupportedOperationException.class, delta::clear);
+        assertTrue(registry.get(symbol()).getTradesSince(2).isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> registry.get(symbol()).getTradesSince(-1));
+        assertThrows(IllegalArgumentException.class, () -> registry.get(symbol()).getTradesSince(3));
+    }
+
+    @Test
+    void engineErrorAfterMutationAlsoRecoversBeforeReleasingTheServiceMonitor() {
+        var sell = limit(OrderSide.SELL, "100", 5);
+        MatchingEngine live = spy(registry.get(symbol()));
+        registry.publish(symbol(), live);
+        doAnswer(call -> {
+            call.callRealMethod();
+            throw new AssertionError("Injected error after engine mutation");
+        }).when(live).submitOrder(any(Order.class));
+        assertThrows(AssertionError.class, () -> limit(OrderSide.BUY, "100", 2));
+        assertNotSame(live, registry.get(symbol()));
+        assertRollbackBaseline(sell);
+    }
+
+    @Test
+    void readersStayBlockedUntilFailedMutationHasBeenReconciled() throws Exception {
+        var sell = limit(OrderSide.SELL, "100", 5);
+        MatchingEngine previous = registry.get(symbol());
+        CountDownLatch recovering = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        doThrow(new DataIntegrityViolationException("Injected failure"))
+                .when(trades).saveAllAndFlush(org.mockito.ArgumentMatchers.<TradeEntity>anyList());
+        doAnswer(call -> {
+            recovering.countDown();
+            if (!release.await(10, TimeUnit.SECONDS)) { throw new IllegalStateException("Recovery timed out"); }
+            return call.callRealMethod();
+        }).when(loader).load(symbol());
+        var workers = Executors.newFixedThreadPool(2);
+        try {
+            var writer = workers.submit(() -> assertThrows(TradingOperationException.class,
+                    () -> limit(OrderSide.BUY, "100", 2)));
+            assertTrue(recovering.await(10, TimeUnit.SECONDS));
+            var reader = workers.submit(() -> service.getMarketSnapshot(symbol()));
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> reader.get(100, TimeUnit.MILLISECONDS));
+            release.countDown();
+            writer.get(10, TimeUnit.SECONDS);
+            assertEquals(0, reader.get(10, TimeUnit.SECONDS).tradeCount());
+            assertNotSame(previous, registry.get(symbol()));
+            assertEquals(5, service.getOrder(owner(), sell.id()).remainingQuantity());
+        } finally {
+            release.countDown();
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
     void savesSubmissionPartialFillsAndMarketRemainderAtomically() {
         PersistedOrder sell = limit(OrderSide.SELL, "100", 5);
         PersistedOrder buy = limit(OrderSide.BUY, "105", 2);
@@ -198,7 +287,7 @@ class TradingServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.getOrder(other, order.id()));
         assertThrows(AccessDeniedException.class, () -> service.cancelOrder(other, order.id()));
         assertThrows(AccessDeniedException.class, () -> service.amendOrder(other, order.id(), BigDecimal.TEN, 2));
-        assertTrue(service.getOrders(other).isEmpty());
+        assertTrue(service.getOrders(other, 0, 25, null).isEmpty());
         Long admin = newUser(true);
         assertTrue(service.amendOrder(admin, order.id(), new BigDecimal("99"), 2));
         assertEquals(owner(), service.getOrder(admin, order.id()).userId());
@@ -255,7 +344,7 @@ class TradingServiceTest {
     }
 
     @Test
-    void databaseFailureAfterMatchingRollsBackOrdersAndTradesWithoutMutatingPublishedEngine() {
+    void databaseFailureAfterMatchingReplacesMutatedEngineWithCommittedState() {
         PersistedOrder sell = limit(OrderSide.SELL, "100", 5);
         MatchingEngine published = registry.get(symbol());
         doAnswer(invocation -> {
@@ -263,7 +352,8 @@ class TradingServiceTest {
             return invocation.callRealMethod();
         }).when(trades).saveAllAndFlush(org.mockito.ArgumentMatchers.<TradeEntity>anyList());
         assertThrows(TradingOperationException.class, () -> limit(OrderSide.BUY, "100", 2));
-        assertEquals(5, published.getMarketSnapshot().sellDepth().firstEntry().getValue());
+        assertTrue(published != registry.get(symbol()));
+        assertEquals(5, service.getMarketSnapshot(symbol()).sellDepth().firstEntry().getValue());
         assertRollbackBaseline(sell);
     }
 
@@ -278,7 +368,7 @@ class TradingServiceTest {
             doAnswer(call -> { call.callRealMethod(); throw new IllegalStateException("Injected engine failure"); })
                     .when(candidate).submitOrder(any(Order.class));
             return new LoadedMarket(real.stock(), real.orders(), candidate, real.previousTradeCount());
-        }).when(loader).load(symbol());
+        }).when(loader).forCommand(eq(symbol()), any(MatchingEngine.class));
         assertThrows(TradingOperationException.class, () -> limit(OrderSide.BUY, "100", 2));
         assertRollbackBaseline(sell);
     }
@@ -319,7 +409,7 @@ class TradingServiceTest {
     @Test
     void failedRecoveryMakesTheMarketUnavailableUntilExplicitRecovery() {
         PersistedOrder sell = limit(OrderSide.SELL, "100", 5);
-        doCallRealMethod().doThrow(new IllegalStateException("Injected recovery failure"))
+        doThrow(new IllegalStateException("Injected recovery failure"))
                 .when(loader).load(symbol());
         doThrow(new DataIntegrityViolationException("Injected save failure"))
                 .when(trades).saveAllAndFlush(org.mockito.ArgumentMatchers.<TradeEntity>anyList());
@@ -444,7 +534,7 @@ class TradingServiceTest {
                 });
             }
             return loaded;
-        }).when(loader).load(symbol());
+        }).when(loader).forCommand(eq(symbol()), any(MatchingEngine.class));
         var workers = Executors.newFixedThreadPool(2);
         try {
             var writer = workers.submit(() -> limit(OrderSide.BUY, "100", 2));
@@ -542,6 +632,6 @@ class TradingServiceTest {
                 });
             }
             return loaded;
-        }).when(loader).load(symbol());
+        }).when(loader).forCommand(eq(symbol()), any(MatchingEngine.class));
     }
 }

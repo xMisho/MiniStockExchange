@@ -174,6 +174,18 @@ public class MatchingEngine {
         return knownOrders.values().stream().map(OrderSnapshot::from).toList();
     }
 
+    public synchronized OrderSnapshot getOrderSnapshot(long orderId) {
+        Order order = knownOrders.get(orderId);
+        return order == null ? null : OrderSnapshot.from(order);
+    }
+
+    public synchronized List<Trade> getTradesSince(int index) {
+        if (index < 0 || index > tradeHistory.size()) {
+            throw new IllegalArgumentException("Invalid trade history position.");
+        }
+        return List.copyOf(tradeHistory.subList(index, tradeHistory.size()));
+    }
+
     private void matchMarketOrder(Order marketOrder) {
         orderBook.removeFilledOrders();
 
