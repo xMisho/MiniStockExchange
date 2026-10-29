@@ -1,6 +1,9 @@
 package com.misho.exchange.trading;
 
 import java.util.List;
+import com.misho.exchange.OrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +20,12 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
     List<OrderEntity> findByStock_SymbolOrderByPrioritySequenceAsc(String symbol);
 
     List<OrderEntity> findByUser_IdOrderByIdAsc(Long userId);
+
+    @EntityGraph(attributePaths = {"user", "stock"})
+    Page<OrderEntity> findByUser_Id(Long userId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user", "stock"})
+    Page<OrderEntity> findByUser_IdAndStatus(Long userId, OrderStatus status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user", "stock"})
     @Query("""

@@ -27,6 +27,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -141,6 +144,19 @@ public class TradingService {
         return transaction(() -> {
             actor(actorId);
             return orders.findByUser_IdOrderByIdAsc(actorId).stream().map(PersistedOrder::from).toList();
+        });
+    }
+
+    public synchronized Page<PersistedOrder> getOrders(Long actorId, int page, int size, OrderStatus status) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100.");
+        }
+        return transaction(() -> {
+            actor(actorId);
+            var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+            var result = status == null ? orders.findByUser_Id(actorId, pageable)
+                    : orders.findByUser_IdAndStatus(actorId, status, pageable);
+            return result.map(PersistedOrder::from);
         });
     }
 

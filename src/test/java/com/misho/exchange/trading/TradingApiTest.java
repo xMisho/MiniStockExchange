@@ -86,8 +86,10 @@ class TradingApiTest {
         assertEquals("FILLED", body.get("status").asText());
         assertEquals(3, body.get("filledQuantity").asInt());
         assertFalse(result.body().contains("password"));
+        assertFalse(body.has("prioritySequence"));
+        assertFalse(body.has("version"));
         assertEquals(2, json.readTree(seller.get("/api/orders/" + sell).body()).get("remainingQuantity").asInt());
-        assertEquals(1, json.readTree(buyer.get("/api/orders/me").body()).size());
+        assertEquals(1, json.readTree(buyer.get("/api/orders/me").body()).get("content").size());
         assertEquals(1, trading.getTradeHistory(symbol).size());
     }
 
@@ -103,7 +105,7 @@ class TradingApiTest {
         assertEquals(403, other.get(path).statusCode());
         assertEquals(403, other.changeJson("PATCH", path, amendment, true).statusCode());
         assertEquals(403, other.changeJson("DELETE", path, "", true).statusCode());
-        assertEquals(0, json.readTree(other.get("/api/orders/me").body()).size());
+        assertEquals(0, json.readTree(other.get("/api/orders/me").body()).get("content").size());
         assertEquals(200, admin.get(path).statusCode());
         assertEquals(204, admin.changeJson("PATCH", path, amendment, true).statusCode());
         assertEquals(3, json.readTree(owner.get(path).body()).get("remainingQuantity").asInt());
@@ -156,6 +158,46 @@ class TradingApiTest {
     }
 
     @Test
+    void historyPaginationFilteringAndResponseFieldsStayOwnedAndBounded() throws Exception {
+        stock();
+        var owner = user(false);
+        var other = user(false);
+        long first = submit(owner, "BUY", "90", 2);
+        long second = submit(owner, "BUY", "91", 3);
+        long third = submit(owner, "BUY", "92", 4);
+        submit(other, "BUY", "89", 1);
+        assertEquals(204, owner.changeJson("DELETE", "/api/orders/" + second, "", true).statusCode());
+        var firstPage = json.readTree(owner.get("/api/orders/me?page=0&size=2").body());
+        assertEquals(3, firstPage.get("totalElements").asInt());
+        assertEquals(2, firstPage.get("totalPages").asInt());
+        assertEquals(0, firstPage.get("page").asInt());
+        assertEquals(2, firstPage.get("size").asInt());
+        assertEquals(third, firstPage.get("content").get(0).get("id").asLong());
+        assertEquals(second, firstPage.get("content").get(1).get("id").asLong());
+        assertFalse(firstPage.get("content").get(0).has("prioritySequence"));
+        assertFalse(firstPage.get("content").get(0).has("version"));
+        var secondPage = json.readTree(owner.get("/api/orders/me?page=1&size=2").body());
+        assertEquals(1, secondPage.get("content").size());
+        assertEquals(first, secondPage.get("content").get(0).get("id").asLong());
+        var cancelled = json.readTree(owner.get("/api/orders/me?status=CANCELLED").body());
+        assertEquals(1, cancelled.get("totalElements").asInt());
+        assertEquals(second, cancelled.get("content").get(0).get("id").asLong());
+        var open = json.readTree(owner.get("/api/orders/me?status=OPEN&size=1").body());
+        assertEquals(2, open.get("totalElements").asInt());
+        assertEquals(1, open.get("content").size());
+        assertEquals(0, json.readTree(owner.get("/api/orders/me?page=10&size=2").body()).get("content").size());
+        assertEquals(25, json.readTree(owner.get("/api/orders/me").body()).get("size").asInt());
+        for (String query : List.of("page=-1", "size=0", "size=101", "page=abc", "size=abc",
+                "status=BOGUS", "page=2147483648")) {
+            var response = owner.get("/api/orders/me?" + query);
+            assertEquals(400, response.statusCode(), query);
+            assertTrue(json.readTree(response.body()).has("error"));
+        }
+        var admin = user(true);
+        assertEquals(0, json.readTree(admin.get("/api/orders/me").body()).get("totalElements").asInt());
+    }
+
+    @Test
     void clientCannotChooseOwnerIdAndFilledOrdersRejectChanges() throws Exception {
         stock();
         var owner = user(false);
@@ -185,6 +227,6 @@ class TradingApiTest {
         assertEquals("TRADING_OUTCOME_UNCERTAIN", body.get("code").asText());
         assertFalse(body.get("retrySafe").asBoolean());
         assertFalse(result.body().contains("internal failure"));
-        assertEquals(1, json.readTree(owner.get("/api/orders/me").body()).size());
+        assertEquals(1, json.readTree(owner.get("/api/orders/me").body()).get("content").size());
     }
 }

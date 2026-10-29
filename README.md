@@ -373,10 +373,18 @@ All trading routes require a session login. POST, PATCH, and DELETE also require
 | Method | Route | Success |
 | --- | --- | --- |
 | POST | `/api/stocks/{symbol}/orders` | `201` with the resulting order and a `Location` header |
-| GET | `/api/orders/me` | `200` with the current user's order history, including terminal orders |
+| GET | `/api/orders/me` | `200` with a page of the current user's order history, including terminal orders |
 | GET | `/api/orders/{id}` | `200` with an owned order; admins may inspect any order |
 | PATCH | `/api/orders/{id}` | `204` after amendment and any resulting matching |
 | DELETE | `/api/orders/{id}` | `204` after cancellation |
+
+History supports `GET /api/orders/me?page=0&size=25&status=OPEN`. Page numbers start at zero, size defaults to 25 and must be 1–100, and status is optional (`OPEN`, `PARTIALLY_FILLED`, `FILLED`, `CANCELLED`). Results are ordered by descending order ID, with a stable tie-free ordering; concurrent new submissions can still shift offset-based pages. Invalid pagination or status values return `400`.
+
+```json
+{"content":[],"page":0,"size":25,"totalElements":0,"totalPages":0}
+```
+
+Order responses expose identity, owner, symbol, side/type, price, quantities, status, and timestamps. Internal FIFO priority sequences and persistence versions are not exposed. Inspect all relevant history pages when checking an uncertain submission.
 
 Submit a limit order:
 
@@ -588,7 +596,7 @@ Surefire writes results to `target/surefire-reports/`. Concurrency tests validat
 
 ## Scope and limitations
 
-This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, plus user registration and session authentication, with persistent matching and engine recovery, but no web frontend, trading REST API, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Trade history, used IDs, and candle history accumulate for the lifetime of the engine.
+This is a multi-stock, in-memory learning project. It has persistent stock metadata, database migrations, and stock registration/read endpoints, plus user registration and session authentication, with persistent matching and engine recovery, but no web frontend, fees, account balances, or real exchange connectivity. The health endpoint reports web-server responsiveness; stock endpoints return saved metadata. Durable order and trade history grows over time; engines reconstruct analytics and candle history from persisted executions. The standalone console remains an in-memory demo.
 
 Register stocks before concurrent trading begins. Use one engine per initially empty book, and interact through the engine during concurrent activity. Do not share submitted order instances across engines, mutate submitted orders, or access their books directly. Returned open orders are live objects, not immutable snapshots; use market snapshots for consistent concurrent statistics. Separate getter calls are independent observations.
 
