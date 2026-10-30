@@ -2,7 +2,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** V3 backend implemented. React frontend, live web updates, and deployment are next.
+**Current state:** V3 backend and React/TypeScript frontend foundation implemented. The market dashboard, account/trading screens, live web updates, and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -14,7 +14,7 @@ These are milestones of the **same project**, not separate applications or relea
 | --- | --- |
 | **V1 — Matching core** | Price/FIFO priority, partial fills, trades, cancellation, statistics, unique IDs, and thread safety. |
 | **V2 — Multi-stock simulator** | Amendments, multiple stocks, market orders, lifecycle status, indexed lookup, depth, VWAP, OHLC, price changes, simulator, and console dashboard. |
-| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Frontend pending. |
+| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Frontend foundation ready; full dashboard and trading screens pending. |
 
 Flyway migration numbers (`V1__...`, etc.) are separate from these milestones. The Maven artifact remains `1.0.0-SNAPSHOT`.
 
@@ -73,6 +73,37 @@ java -Ddashboard.clear=true -cp target/mini-stock-exchange-1.0.0-SNAPSHOT.jar co
 
 Arguments: duration in seconds, order interval in milliseconds, random seed, selected stock. Defaults: `10 100 42 AAPL`.
 
+## Frontend development
+
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a small backend connection screen. It does not yet display market data or implement login/trading controls. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
+
+Start Spring from the repository root in one terminal:
+
+```bash
+./mvnw spring-boot:run
+```
+
+In another terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open **http://localhost:5173**. Vite forwards relative `/api` requests to `http://localhost:8080`; the browser uses the frontend origin, and Spring's existing authentication/CSRF rules remain unchanged. The connection check handles loading, unavailable-backend, timeout, and retry states. A successful health response confirms web-server responsiveness, not database/trading readiness.
+
+To use a different development backend, copy `frontend/.env.example` to `frontend/.env.local`, set `BACKEND_URL`, and restart Vite. This server-only setting is not bundled into the browser. Frontend env files stay separate from the root `.env`; never place database passwords in `VITE_*` variables.
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+`npm run preview` serves the built static files on port 4173 for inspection; it does not configure an API proxy. Production hosting and API routing will be added with deployment. Both development servers bind to localhost. Dependencies are locked in `frontend/package-lock.json`; generated `node_modules/` and `dist/` are ignored by Git.
+
 ## REST API
 
 Public GETs require no login or CSRF. All mutations require CSRF; trading requires login, and stock registration requires ADMIN. Login is form-encoded; other request bodies are JSON.
@@ -125,7 +156,7 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
 - No balances, portfolios, settlement, real exchange connectivity, or external price feed.
-- Local development only for now. Frontend, SSE, Docker deployment, and further production hardening remain planned.
+- Local development only for now. Dashboard/account/trading screens, SSE, Docker deployment, and further production hardening remain planned.
 
 ## Detailed guides
 

@@ -1,0 +1,51 @@
+.app-shell { max-width: 1184px; margin: 0 auto; padding: 0 40px; }
+.site-header { min-height: 104px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dce2db; }
+.brand { display: flex; gap: 12px; align-items: center; text-decoration: none; font-size: 17px; font-weight: 650; letter-spacing: -.5px; }
+.brand-mark { display: flex; align-items: center; justify-content: center; height: 36px; width: 40px; border-radius: 9px; background: #1d4d3c; color: #fff; font-size: 20px; font-weight: 700; }
+.brand-mark span { font-size: 16px; margin-left: -2px; margin-top: -8px; color: #b0d9a9; }
+.environment-label { display: flex; gap: 8px; align-items: center; color: #64716a; font-size: 12px; }
+.environment-label > span { width: 6px; height: 6px; background: #93a38a; border-radius: 50%; }
+.workspace-intro { padding: 76px 0 52px; max-width: 620px; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #697b6c; margin: 0 0 18px; }
+h1 { font-weight: 500; font-size: clamp(40px, 5.4vw, 66px); line-height: 1.08; letter-spacing: -3px; margin: 0 0 24px; }
+.intro-description { max-width: 460px; font-size: 15px; line-height: 1.8; color: #68736d; }
+.connection-panel { display: grid; grid-template-columns: 1.2fr 1fr; gap: 56px; padding: 36px 40px; border: 1px solid #d4dfd5; background: #fff; border-radius: 16px; box-shadow: 0 6px 20px #24332604; }
+.connection-panel .eyebrow { margin-bottom: 13px; }
+h2 { margin: 0; font-size: 24px; font-weight: 550; letter-spacing: -.8px; }
+.panel-description { color: #728078; font-size: 13px; line-height: 1.8; max-width: 390px; margin: 14px 0 0; }
+.connection-details { border-left: 1px solid #e7eae5; padding-left: 36px; }
+.connection-status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; border-radius: 24px; padding: 8px 11px; background: #f1f3ed; color: #687460; }
+.connection-status.connected { color: #276a4c; background: #eaf5ec; }
+.connection-status.unavailable { color: #8b5b26; background: #fbf1df; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.connection-help { min-height: 45px; font-size: 12px; line-height: 1.75; color: #748078; margin: 13px 0 18px; }
+code { background: #f1f4ef; padding: 2px 4px; border-radius: 4px; color: #36543d; overflow-wrap: anywhere; font-size: 11px; }
+button { display: inline-flex; justify-content: space-between; align-items: center; gap: 24px; background: #254e3e; color: #fff; border: 0; border-radius: 7px; padding: 11px 15px; font-size: 12px; cursor: pointer; transition: background 150ms ease; }
+button:hover { background: #163b2c; }
+button:disabled { opacity: .55; cursor: wait; }
+.next-section { margin: 50px 0 64px; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.section-heading h2 { font-size: 16px; letter-spacing: -.4px; }
+.section-heading > span { font-size: 11px; color: #8a958d; }
+.milestone-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 23px; gap: 32px; }
+.milestone-grid article { padding-top: 20px; border-top: 1px solid #dce2db; }
+.milestone-number { color: #8b9a8c; font-size: 11px; font-variant-numeric: tabular-nums; }
+h3 { margin: 17px 0 9px; font-size: 14px; font-weight: 600; letter-spacing: -.3px; }
+.milestone-grid p { color: #7a857c; font-size: 12px; line-height: 1.8; margin: 0; max-width: 270px; }
+footer { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid #dce2db; padding: 24px 0 30px; color: #7d887e; font-size: 10px; }
+@media (max-width: 700px) {
+  .app-shell { padding: 0 22px; }
+  .site-header { min-height: 82px; flex-wrap: wrap; padding: 18px 0; }
+  .environment-label { font-size: 10px; }
+  .brand { font-size: 15px; }
+  .workspace-intro { padding: 48px 0 32px; }
+  h1 { letter-spacing: -2px; }
+  .connection-panel { grid-template-columns: 1fr; gap: 24px; padding: 26px; }
+  .connection-details { border-left: 0; border-top: 1px solid #e7eae5; padding: 22px 0 0; }
+  .milestone-grid { grid-template-columns: 1fr; gap: 22px; }
+  .milestone-grid p { max-width: none; }
+  .next-section { margin: 36px 0; }
+  .section-heading > span { display: none; }
+  footer { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }
