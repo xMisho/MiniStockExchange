@@ -1,4 +1,4 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -7,6 +7,8 @@ import com.misho.exchange.OrderType;
 import com.misho.exchange.stock.StockEntity;
 import com.misho.exchange.stock.StockRepository;
 import com.misho.exchange.support.ApiTestClient;
+import com.misho.exchange.trading.PersistedOrder;
+import com.misho.exchange.trading.TradingService;
 import com.misho.exchange.user.RegisterUserRequest;
 import com.misho.exchange.user.UserService;
 import java.math.BigDecimal;

@@ -1,4 +1,4 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
 import java.util.List;
 import org.springframework.data.domain.Page;

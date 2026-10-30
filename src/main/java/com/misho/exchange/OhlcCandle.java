@@ -2,7 +2,6 @@ package com.misho.exchange;
 
 import java.math.BigDecimal;
 
-
 public final class OhlcCandle {
 
     private final long minuteStartTime;

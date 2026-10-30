@@ -9,6 +9,9 @@ import com.misho.exchange.OrderSnapshot;
 import com.misho.exchange.OrderStatus;
 import com.misho.exchange.OrderType;
 import com.misho.exchange.Trade;
+import com.misho.exchange.marketdata.CandleRepository;
+import com.misho.exchange.marketdata.CandleResponse;
+import com.misho.exchange.marketdata.TradeResponse;
 import com.misho.exchange.stock.StockRepository;
 import com.misho.exchange.user.UserEntity;
 import com.misho.exchange.user.UserRepository;
@@ -25,12 +28,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -149,12 +152,9 @@ public class TradingService {
     }
 
     public synchronized Page<PersistedOrder> getOrders(Long actorId, int page, int size, OrderStatus status) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100.");
-        }
+        var pageable = historyPage(page, size);
         return transaction(() -> {
             actor(actorId);
-            var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
             var result = status == null ? orders.findByUser_Id(actorId, pageable)
                     : orders.findByUser_IdAndStatus(actorId, status, pageable);
             return result.map(PersistedOrder::from);
@@ -171,12 +171,9 @@ public class TradingService {
 
     public synchronized Page<TradeResponse> getTradeHistory(String symbol, int page, int size) {
         String canonical = symbol(symbol);
-        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Invalid page or size; size must be between 1 and 100.");
-        }
+        var pageable = historyPage(page, size);
         return transaction(() -> {
             if (!stocks.existsById(canonical)) { throw new UnknownMarketException(); }
-            var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
             return trades.findByStock_Symbol(canonical, pageable).map(TradeResponse::from);
         });
     }
@@ -300,6 +297,13 @@ public class TradingService {
         if (!actor.getId().equals(order.getUser().getId()) && actor.getRole() != UserRole.ADMIN) {
             throw new AccessDeniedException("Order belongs to another user.");
         }
+    }
+
+    private PageRequest historyPage(int page, int size) {
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Invalid page or size; size must be between 1 and 100.");
+        }
+        return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
     }
 
     private <T> T transaction(Supplier<T> operation) {

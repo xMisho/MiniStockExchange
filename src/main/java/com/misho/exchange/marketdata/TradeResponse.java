@@ -1,11 +1,12 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
+import com.misho.exchange.trading.TradeEntity;
 import java.math.BigDecimal;
 import java.time.Instant;
 
 public record TradeResponse(Long tradeId, String symbol, BigDecimal executionPrice,
                             int quantity, Instant executedAt) {
-    static TradeResponse from(TradeEntity trade) {
+    public static TradeResponse from(TradeEntity trade) {
         return new TradeResponse(trade.getId(), trade.getStock().getSymbol(), trade.getExecutionPrice(),
                 trade.getQuantity(), trade.getExecutedAt());
     }

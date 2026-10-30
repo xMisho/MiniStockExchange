@@ -1,4 +1,4 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
 import com.misho.exchange.MarketSnapshot;
 import java.math.BigDecimal;

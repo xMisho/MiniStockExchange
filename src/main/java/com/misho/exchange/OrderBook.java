@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-
 public class OrderBook {
 
     private final NavigableMap<BigDecimal, Deque<Order>> buyOrders;

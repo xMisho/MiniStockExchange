@@ -188,7 +188,7 @@ class TradingApiTest {
         assertEquals(0, json.readTree(owner.get("/api/orders/me?page=10&size=2").body()).get("content").size());
         assertEquals(25, json.readTree(owner.get("/api/orders/me").body()).get("size").asInt());
         for (String query : List.of("page=-1", "size=0", "size=101", "page=abc", "size=abc",
-                "status=BOGUS", "page=2147483648")) {
+                "status=BOGUS", "page=2147483648", "page=2147483647&size=100")) {
             var response = owner.get("/api/orders/me?" + query);
             assertEquals(400, response.statusCode(), query);
             assertTrue(json.readTree(response.body()).has("error"));

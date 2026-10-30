@@ -1,12 +1,13 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
+import com.misho.exchange.trading.UnknownMarketException;
 import java.util.Map;
 import org.springframework.dao.DataAccessException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice(assignableTypes = MarketDataController.class)
 public class MarketDataExceptionHandler {
@@ -21,7 +22,7 @@ public class MarketDataExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<Map<String, String>> invalidLevelsType() {
+    public ResponseEntity<Map<String, String>> invalidParameterType() {
         return ResponseEntity.badRequest().body(Map.of("error", "Invalid market data parameter."));
     }
 

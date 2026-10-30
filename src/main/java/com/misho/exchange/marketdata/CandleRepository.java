@@ -1,4 +1,4 @@
-package com.misho.exchange.trading;
+package com.misho.exchange.marketdata;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -8,14 +8,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-class CandleRepository {
+public class CandleRepository {
     private final JdbcTemplate jdbc;
 
     CandleRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    List<CandleResponse> find(String symbol, Instant from, Instant to, int limit) {
+    public List<CandleResponse> find(String symbol, Instant from, Instant to, int limit) {
         StringBuilder filter = new StringBuilder("stock_symbol = ?");
         List<Object> parameters = new ArrayList<>();
         parameters.add(symbol);

@@ -913,7 +913,6 @@ void marketStatisticsAreIndependentPerStock() {
     assertNull(exchange.getSpread("NVDA"));
 }
 
-
     @Test
     void lastTradedPriceUpdatesOnlyAfterTrade() {
         Exchange exchange = new Exchange();
