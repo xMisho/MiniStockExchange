@@ -109,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and a public market-summary snapshot endpoint are implemented; the web frontend is not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and public market snapshot and depth endpoints are implemented; the web frontend is not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -392,7 +392,7 @@ It prints median and mean milliseconds for each operation. Ordinary regression r
 
 ## Market snapshot API
 
-`GET /api/stocks/{symbol}/snapshot` is public and returns one stock's consistent summary through the synchronized `TradingService`. Symbols are normalized to uppercase. The dedicated `MarketSnapshotResponse` DTO keeps the JSON contract separate from the internal snapshot; depth and candles are omitted and remain future market-data endpoints.
+`GET /api/stocks/{symbol}/snapshot` is public and returns one stock's consistent summary through the synchronized `TradingService`. Symbols are normalized to uppercase. The dedicated `MarketSnapshotResponse` DTO keeps the JSON contract separate from the internal snapshot; depth and candles are omitted from this response. Depth is available from its dedicated endpoint below; a candle endpoint is still planned.
 
 ```bash
 curl http://localhost:8080/api/stocks/AAPL/snapshot
@@ -419,6 +419,28 @@ Illustrative response after executions (values depend on this application's pers
 This example assumes a reference price of 100.00. Price change is last execution minus reference price; percentage change uses that reference as the denominator. Volume counts executed shares once per trade. Open-order count counts resting orders, not shares. Spread is best ask minus best bid and is null if either quote is absent. Before any executions, last price, price change, percentage change, and VWAP are null; counters are zero for an empty market. Resting orders can populate quotes without creating an execution. Decimal precision is preserved for clients to format.
 
 Returns `404` for an unregistered symbol, `400` for an invalid symbol, and `503` when market data cannot be recovered or the market is blocked. Read errors do not expose internal database/recovery details. This endpoint does not expose order owners, individual orders, depth, candles, or credentials. Requests require neither a login nor a CSRF token; trading mutations retain their existing protection.
+
+## Market depth API
+
+`GET /api/stocks/{symbol}/depth?levels=3` is public and returns aggregated remaining quantities at each price. It uses one immutable snapshot obtained under the `TradingService` monitor, so the bid and ask sides come from the same market state.
+
+```bash
+curl 'http://localhost:8080/api/stocks/AAPL/depth?levels=3'
+```
+
+Illustrative response:
+
+```json
+{
+  "symbol": "AAPL",
+  "bids": [{"price": 99.00, "quantity": 12}],
+  "asks": [{"price": 101.00, "quantity": 8}]
+}
+```
+
+Bids are highest price first; asks are lowest price first. `quantity` is a `long` sum of remaining shares at that price, not the number of orders or their original quantities. Numerically equal prices share a price level. The limit applies independently to each side and counts price levels, not orders. It defaults to 3 and must be an integer between 1 and 100; invalid values return `400`. Empty sides return empty arrays. Partial fills, cancellations, amendments, and recovery are reflected in subsequent reads.
+
+Symbols are normalized to uppercase. Unknown symbols return `404`, invalid symbols/parameters return `400`, and unavailable markets return `503` with a safe error message. No login or CSRF token is required. The response exposes no individual order IDs or owners. Responses are bounded, although the existing internal snapshot still aggregates the complete open book before selecting the requested levels.
 
 ## Trading API
 

@@ -2,6 +2,7 @@ package com.misho.exchange.trading;
 
 import java.util.Map;
 import org.springframework.dao.DataAccessException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,8 +16,13 @@ public class MarketDataExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> invalidSymbol() {
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid stock symbol."));
+    public ResponseEntity<Map<String, String>> invalidRequest() {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid stock symbol or market data parameter."));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, String>> invalidLevelsType() {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid market data parameter."));
     }
 
     @ExceptionHandler({IllegalStateException.class, DataAccessException.class})
