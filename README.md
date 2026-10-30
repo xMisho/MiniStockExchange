@@ -109,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints are implemented; the web frontend is not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and a public market-summary snapshot endpoint are implemented; the web frontend is not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -389,6 +389,36 @@ Local comparison on 2026-10-29 (same fixture and ten-sample procedure; baseline 
 At the largest size, mean latency changed from 176.914 → 1.179 ms for resting submit, 167.114 → 4.291 ms for amendment, 155.406 → 3.918 ms for cancellation, and 180.811 → 7.107 ms for executing market submit. These short sequential runs demonstrate the removed history replay cost; differences between optimized fixture sizes also reflect warmup/cache/machine effects, so they do not establish a scaling curve or throughput SLA.
 
 It prints median and mean milliseconds for each operation. Ordinary regression runs skip the benchmark unless explicitly enabled. Results are local diagnostic measurements, not a production capacity guarantee; logging, JIT compilation, database cache, and machine load affect timing.
+
+## Market snapshot API
+
+`GET /api/stocks/{symbol}/snapshot` is public and returns one stock's consistent summary through the synchronized `TradingService`. Symbols are normalized to uppercase. The dedicated `MarketSnapshotResponse` DTO keeps the JSON contract separate from the internal snapshot; depth and candles are omitted and remain future market-data endpoints.
+
+```bash
+curl http://localhost:8080/api/stocks/AAPL/snapshot
+```
+
+Illustrative response after executions (values depend on this application's persisted orders and trades, not a live external market feed):
+
+```json
+{
+  "symbol": "AAPL",
+  "lastTradedPrice": 101.00,
+  "priceChange": 1.00,
+  "priceChangePercent": 1.0000,
+  "bestBidPrice": 99.00,
+  "bestAskPrice": 101.00,
+  "spread": 2.00,
+  "volume": 2,
+  "tradeCount": 1,
+  "openOrderCount": 2,
+  "vwap": 101.0000
+}
+```
+
+This example assumes a reference price of 100.00. Price change is last execution minus reference price; percentage change uses that reference as the denominator. Volume counts executed shares once per trade. Open-order count counts resting orders, not shares. Spread is best ask minus best bid and is null if either quote is absent. Before any executions, last price, price change, percentage change, and VWAP are null; counters are zero for an empty market. Resting orders can populate quotes without creating an execution. Decimal precision is preserved for clients to format.
+
+Returns `404` for an unregistered symbol, `400` for an invalid symbol, and `503` when market data cannot be recovered or the market is blocked. Read errors do not expose internal database/recovery details. This endpoint does not expose order owners, individual orders, depth, candles, or credentials. Requests require neither a login nor a CSRF token; trading mutations retain their existing protection.
 
 ## Trading API
 
