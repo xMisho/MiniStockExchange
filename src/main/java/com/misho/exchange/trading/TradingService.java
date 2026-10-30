@@ -39,10 +39,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class TradingService {
 
+    private static final Instant MIN_CANDLE_BOUND = Instant.parse("0001-01-01T00:00:00Z");
+    private static final Instant MAX_CANDLE_BOUND = Instant.parse("+10000-01-01T00:00:00Z");
+
     private final StockRepository stocks;
     private final UserRepository users;
     private final OrderRepository orders;
     private final TradeRepository trades;
+    private final CandleRepository candles;
     private final MarketLoader loader;
     private final MarketRegistry registry;
     private final JdbcTemplate jdbc;
@@ -50,11 +54,12 @@ public class TradingService {
 
     public TradingService(StockRepository stocks, UserRepository users, OrderRepository orders,
                           TradeRepository trades, MarketLoader loader, MarketRegistry registry,
-                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
+                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager, CandleRepository candles) {
         this.stocks = stocks;
         this.users = users;
         this.orders = orders;
         this.trades = trades;
+        this.candles = candles;
         this.loader = loader;
         this.registry = registry;
         this.jdbc = jdbc;
@@ -173,6 +178,23 @@ public class TradingService {
             if (!stocks.existsById(canonical)) { throw new UnknownMarketException(); }
             var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
             return trades.findByStock_Symbol(canonical, pageable).map(TradeResponse::from);
+        });
+    }
+
+    public synchronized List<CandleResponse> getCandles(String symbol, Instant from, Instant to, int limit) {
+        String canonical = symbol(symbol);
+        if (limit < 1 || limit > 1000 || (from != null && to != null && !from.isBefore(to))) {
+            throw new IllegalArgumentException("Invalid candle range or limit.");
+        }
+        for (Instant bound : new Instant[]{from, to}) {
+            if (bound != null && (bound.isBefore(MIN_CANDLE_BOUND)
+                    || !bound.isBefore(MAX_CANDLE_BOUND))) {
+                throw new IllegalArgumentException("Candle bounds must be within supported calendar years.");
+            }
+        }
+        return transaction(() -> {
+            if (!stocks.existsById(canonical)) { throw new UnknownMarketException(); }
+            return candles.find(canonical, from, to, limit);
         });
     }
 

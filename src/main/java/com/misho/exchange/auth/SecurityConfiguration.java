@@ -21,7 +21,7 @@ public class SecurityConfiguration {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/stocks", "/api/stocks/*",
-                                "/api/auth/csrf", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades").permitAll()
+                                "/api/auth/csrf", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*").authenticated()

@@ -109,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and public market snapshot, depth, and paginated trade-history endpoints are implemented; the web frontend is not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and public market snapshot, depth, paginated trade-history, and one-minute candle endpoints are implemented; the web frontend is not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -392,7 +392,7 @@ It prints median and mean milliseconds for each operation. Ordinary regression r
 
 ## Market snapshot API
 
-`GET /api/stocks/{symbol}/snapshot` is public and returns one stock's consistent summary through the synchronized `TradingService`. Symbols are normalized to uppercase. The dedicated `MarketSnapshotResponse` DTO keeps the JSON contract separate from the internal snapshot; depth and candles are omitted from this response. Depth is available from its dedicated endpoint below; a candle endpoint is still planned.
+`GET /api/stocks/{symbol}/snapshot` is public and returns one stock's consistent summary through the synchronized `TradingService`. Symbols are normalized to uppercase. The dedicated `MarketSnapshotResponse` DTO keeps the JSON contract separate from the internal snapshot; depth and candles are omitted from this response. Depth is available from its dedicated endpoint below; candles are available from their dedicated endpoint below.
 
 ```bash
 curl http://localhost:8080/api/stocks/AAPL/snapshot
@@ -467,6 +467,31 @@ Illustrative response:
 Results sort by trade ID descending, not execution timestamp. This gives deterministic ordering even for tied or backward-moving timestamps. Only `tradeId`, `symbol`, `executionPrice`, `quantity`, and `executedAt` are exposed; user IDs and buy/sell order IDs stay private. Prices retain stored precision, and execution times are UTC instants.
 
 Page numbers start at zero and default to 0. Size defaults to 25 and must be 1–100. Invalid parameters return `400`, including page offsets exceeding the persistence provider's supported integer offset. Symbols are normalized to uppercase; unknown stocks return `404`. Empty histories and pages beyond the last page return `200` with empty `content` and pagination metadata. Offset-based pages can shift when new trades arrive between requests; clients should refresh rather than treat successive pages as a fixed historical snapshot. Database unavailability returns a safe `503` error.
+
+## One-minute candle API
+
+`GET /api/stocks/{symbol}/candles` aggregates committed PostgreSQL trades into UTC minute buckets. It does not create a candles table, synthesize idle candles, or read from the live engine. Public reads remain available while a market is blocked if PostgreSQL is accessible.
+
+```bash
+curl 'http://localhost:8080/api/stocks/AAPL/candles?limit=100'
+curl 'http://localhost:8080/api/stocks/AAPL/candles?from=2026-10-30T09:00:00Z&to=2026-10-30T10:00:00Z&limit=100'
+```
+
+Illustrative response:
+
+```json
+[
+  {"startTime":"2026-10-30T09:00:00Z","open":100.00,"high":103.00,"low":99.00,"close":102.00,"volume":20,"tradeCount":4}
+]
+```
+
+Each response candle contains only `startTime`, `open`, `high`, `low`, `close`, `volume`, and `tradeCount`. Open is the first execution ordered by `(executed_at ASC, id ASC)`; close is the last ordered by `(executed_at DESC, id DESC)`. High/low are maximum/minimum execution prices. Volume sums executed quantities once per trade, and trade count counts executions. Volume and count use `long` values. Prices retain database precision. This timestamp-based ordering intentionally differs from the trade-history API's ID-based ordering and the engine's execution-sequence candle replay if timestamps move backward.
+
+`from` and `to` are optional ISO-8601 instants with UTC (`Z`) or an explicit offset. Either bound may be supplied alone. Execution filtering is **from inclusive, to exclusive**, before aggregation; a partially covered minute therefore represents only trades within the requested range. Buckets still start at the UTC minute boundary. If both bounds are supplied, `from` must precede `to`. Supported bounds are within calendar years 1–9999 UTC. PostgreSQL stores microsecond timestamps; finer request boundaries are rounded upward for comparisons so inclusivity/exclusivity is preserved for stored execution times.
+
+The API selects the **latest N execution-bearing buckets within the filter**, then returns them oldest to newest. Limit defaults to 100 and must be an integer from 1–1000. Minutes without executions are omitted. The current minute's candle can change as trades arrive, and a candle is not marked final. No matching trades returns `200 []`; unknown stock returns `404`; invalid symbol, timestamps, range, or limit returns `400`; database unavailability returns a safe `503`. No login or CSRF token is required.
+
+Flyway migration V6 adds `(stock_symbol, executed_at, id)` to support stock/time-range access. Existing migrations are unchanged. Returned candles are bounded, but aggregation still processes the matching execution history; materialized candles and tighter query-cost controls are deferred until measured workloads justify them.
 
 ## Trading API
 
