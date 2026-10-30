@@ -164,6 +164,18 @@ public class TradingService {
         return market(symbol(symbol)).getTradeHistory();
     }
 
+    public synchronized Page<TradeResponse> getTradeHistory(String symbol, int page, int size) {
+        String canonical = symbol(symbol);
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Invalid page or size; size must be between 1 and 100.");
+        }
+        return transaction(() -> {
+            if (!stocks.existsById(canonical)) { throw new UnknownMarketException(); }
+            var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+            return trades.findByStock_Symbol(canonical, pageable).map(TradeResponse::from);
+        });
+    }
+
     public synchronized NavigableMap<Long, OhlcCandle> getOhlcCandles(String symbol) {
         return market(symbol(symbol)).getOhlcCandles();
     }

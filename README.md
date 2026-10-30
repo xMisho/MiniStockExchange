@@ -109,7 +109,7 @@ MiniStockExchange/
 
 ## V3 foundation: Spring Boot
 
-V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and public market snapshot and depth endpoints are implemented; the web frontend is not implemented yet.
+V3 development starts with Spring Boot 4.1.2 and Spring Web, integrated into the existing project. The matching engine and console launcher remain available. PostgreSQL connectivity, JPA/Hibernate, and Flyway are configured. Stock metadata persistence, registration, and read endpoints are now implemented. User registration is now implemented with hashed passwords. Session login, logout, current-user lookup, CSRF protection, and admin-only stock registration are now implemented. Persistent matching and startup recovery are implemented through `TradingService`. Authenticated trading HTTP endpoints and public market snapshot, depth, and paginated trade-history endpoints are implemented; the web frontend is not implemented yet.
 
 Set up PostgreSQL as described below, then start the web application from the repository root:
 
@@ -441,6 +441,32 @@ Illustrative response:
 Bids are highest price first; asks are lowest price first. `quantity` is a `long` sum of remaining shares at that price, not the number of orders or their original quantities. Numerically equal prices share a price level. The limit applies independently to each side and counts price levels, not orders. It defaults to 3 and must be an integer between 1 and 100; invalid values return `400`. Empty sides return empty arrays. Partial fills, cancellations, amendments, and recovery are reflected in subsequent reads.
 
 Symbols are normalized to uppercase. Unknown symbols return `404`, invalid symbols/parameters return `400`, and unavailable markets return `503` with a safe error message. No login or CSRF token is required. The response exposes no individual order IDs or owners. Responses are bounded, although the existing internal snapshot still aggregates the complete open book before selecting the requested levels.
+
+## Public trade history API
+
+`GET /api/stocks/{symbol}/trades?page=0&size=25` reads committed executions directly from PostgreSQL through `TradingService`, without copying the engine's history or requiring the live market to be available. It remains readable when engine recovery is blocked, provided the database is accessible. Public reads require neither login nor CSRF.
+
+```bash
+curl 'http://localhost:8080/api/stocks/AAPL/trades?page=0&size=25'
+```
+
+Illustrative response:
+
+```json
+{
+  "content": [
+    {"tradeId": 42, "symbol": "AAPL", "executionPrice": 101.00, "quantity": 2, "executedAt": "2026-10-30T09:00:00Z"}
+  ],
+  "page": 0,
+  "size": 25,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+Results sort by trade ID descending, not execution timestamp. This gives deterministic ordering even for tied or backward-moving timestamps. Only `tradeId`, `symbol`, `executionPrice`, `quantity`, and `executedAt` are exposed; user IDs and buy/sell order IDs stay private. Prices retain stored precision, and execution times are UTC instants.
+
+Page numbers start at zero and default to 0. Size defaults to 25 and must be 1–100. Invalid parameters return `400`, including page offsets exceeding the persistence provider's supported integer offset. Symbols are normalized to uppercase; unknown stocks return `404`. Empty histories and pages beyond the last page return `200` with empty `content` and pagination metadata. Offset-based pages can shift when new trades arrive between requests; clients should refresh rather than treat successive pages as a fixed historical snapshot. Database unavailability returns a safe `503` error.
 
 ## Trading API
 

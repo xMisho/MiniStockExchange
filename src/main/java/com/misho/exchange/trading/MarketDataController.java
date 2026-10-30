@@ -28,4 +28,11 @@ public class MarketDataController {
         }
         return MarketDepthResponse.from(trading.getMarketSnapshot(symbol), levels);
     }
+
+    @GetMapping("/{symbol}/trades")
+    public TradeHistoryResponse trades(@PathVariable String symbol,
+                                       @RequestParam(defaultValue = "0") int page,
+                                       @RequestParam(defaultValue = "25") int size) {
+        return TradeHistoryResponse.from(trading.getTradeHistory(symbol, page, size));
+    }
 }
