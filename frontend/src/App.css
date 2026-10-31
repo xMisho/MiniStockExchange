@@ -103,3 +103,31 @@ footer { display: flex; justify-content: space-between; gap: 16px; border-top: 1
 .account-notice { font-size: 12px; line-height: 1.7; color: #805139; }
 .account-area button:disabled { opacity: .55; cursor: wait; }
 @media (max-width: 480px) { .account-form-panel { position: static; margin-top: 16px; } }
+
+.trading-workspace { display: grid; gap: 24px; margin-bottom: 48px; }
+.trading-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.trading-form fieldset, .amend-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.trading-form label, .amend-form label, .order-history-tools label { display: grid; gap: 8px; color: #526958; font-size: 12px; }
+.trading-form input, .trading-form select, .amend-form input, .order-history-tools select { width: 100%; min-width: 0; background: white; color: #27382b; border: 1px solid #bbcbbb; border-radius: 6px; padding: 10px; font: inherit; }
+.trading-form input:disabled { background: #f1f4ef; }
+.trading-error { color: #a34545; font-size: 12px; }
+.trading-notice { padding: 18px 22px; background: #edf4ec; border: 1px solid #c9dac8; border-radius: 10px; font-size: 13px; line-height: 1.8; }
+.trading-notice p { margin: 0 0 8px; }
+.trading-notice.error, .trading-notice.uncertain { color: #805139; background: #faf4e9; border-color: #e0cfae; }
+.text-button, .order-actions > button { background: transparent; border: 1px solid #c9d8c7; border-radius: 5px; padding: 7px 10px; color: #285c44; cursor: pointer; font: inherit; font-size: 12px; }
+.text-button:disabled, .order-actions button:disabled, .trading-form button:disabled { opacity: .5; cursor: not-allowed; }
+.trading-notice button + button { margin-left: 12px; }
+.order-history-tools, .order-pagination { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin: 18px 0; color: #6f7d71; font-size: 11px; }
+.order-history-tools label { min-width: 180px; }
+.order-table { font-size: 11px; }
+.order-table td { vertical-align: top; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 180px; max-width: 260px; white-space: normal; }
+.amend-form { flex-basis: 100%; padding: 14px; border: 1px solid #d7e0d6; border-radius: 7px; text-align: left; }
+.amend-form label + label { margin-top: 12px; }
+.order-status { display: inline-block; padding: 4px 7px; border-radius: 5px; background: #f0f3ec; font-size: 10px; }
+.status-filled { color: #28734e; }.status-cancelled { color: #805139; }
+@media (max-width: 760px) { .trading-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .trading-fields { grid-template-columns: 1fr; } }
+
+.trading-link { display: inline-block; text-decoration: none; margin-top: 16px; }
+#trading, #my-orders { scroll-margin-top: 24px; }

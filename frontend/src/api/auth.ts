@@ -3,21 +3,31 @@ import { isRecord } from './client'
 export interface User { id: number; username: string; email: string; role: 'USER' | 'ADMIN' }
 export class AuthError extends Error {
   status: number
-  constructor(message: string, status: number) { super(message); this.status = status }
+  mutationSent: boolean
+  code?: string
+  retrySafe?: boolean
+  constructor(message: string, status: number, mutationSent = false, code?: string, retrySafe?: boolean) {
+    super(message); this.status = status; this.mutationSent = mutationSent; this.code = code; this.retrySafe = retrySafe
+  }
 }
 const expiredListeners = new Set<() => void>()
 export function onSessionExpired(listener: () => void) { expiredListeners.add(listener); return () => { expiredListeners.delete(listener) } }
 
 async function request(path: string, init: RequestInit = {}, protectedRequest = false): Promise<Response> {
   let response: Response
+  const mutationSent = !['GET', 'HEAD'].includes(init.method ?? 'GET')
+  const timeout = AbortSignal.timeout(8000)
   try {
-    response = await fetch(path, { ...init, credentials: 'same-origin', signal: AbortSignal.timeout(8000), headers: { Accept: 'application/json', ...init.headers } })
-  } catch { throw new Error('Couldn’t reach the server. Check your connection. If you submitted a form, its outcome may be unknown; check before trying again.') }
+    response = await fetch(path, { ...init, credentials: 'same-origin', signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout, headers: { Accept: 'application/json', ...init.headers } })
+  } catch { throw new AuthError(mutationSent ? 'Couldn’t reach the server. The request outcome may be unknown; check before trying again.' : 'Couldn’t reach the server. Check your connection and try again.', 0, mutationSent) }
   if (!response.ok) {
+    if (init.signal?.aborted) throw new DOMException('Request aborted', 'AbortError')
     if (response.status === 401 && protectedRequest) expiredListeners.forEach((listener) => listener())
+    let code: string | undefined
+    let retrySafe: boolean | undefined
     let message = response.status === 403 ? 'Access denied or security token expired. Please try again.' : `Request failed (${response.status}).`
-    try { const body: unknown = await response.json(); if (isRecord(body) && typeof body.error === 'string') message = body.error } catch {}
-    throw new AuthError(message, response.status)
+    try { const body: unknown = await response.json(); if (isRecord(body)) { if (typeof body.error === 'string') message = body.error; if (typeof body.code === 'string') code = body.code; if (typeof body.retrySafe === 'boolean') retrySafe = body.retrySafe } } catch {}
+    throw new AuthError(message, response.status, mutationSent, code, retrySafe)
   }
   return response
 }
@@ -46,3 +56,5 @@ export async function register(username: string, email: string, password: string
   return userFrom(await (await csrfRequest('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password }) }, false)).json())
 }
 export async function logout() { await csrfRequest('/api/auth/logout', { method: 'POST' }) }
+
+export function authenticatedRequest(path: string, signal?: AbortSignal) { return request(path, { signal }, true) }

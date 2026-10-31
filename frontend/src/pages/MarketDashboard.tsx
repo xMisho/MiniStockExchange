@@ -1,3 +1,4 @@
+import { TradingWorkspace } from '../components/trading/TradingWorkspace'
 import { useEffect, useState } from 'react'
 import { useSymbolResource } from '../hooks/useSymbolResource'
 import { getStocks } from '../api/stocks'
@@ -38,6 +39,7 @@ export function MarketDashboard() {
         <p className="eyebrow">V3 / MARKET WORKSPACE</p>
         <h1 id="dashboard-title">Your market, at a glance.</h1>
         <p>Select a stock to explore its current quotes and execution statistics.</p>
+        <a className="text-button trading-link" href="#trading">Trading &amp; My Orders ↓</a>
       </section>
       {stockState.status === 'loading' ? <section className="page-message" role="status">Loading registered stocks…</section>
         : stockState.status === 'error' ? (
@@ -55,6 +57,7 @@ export function MarketDashboard() {
             {selected && <div className="market-workspace"><MarketSummary stock={selected} snapshot={selectedSymbol ? { symbol: selectedSymbol, ...summary.resource } : null} onRetry={summary.retry} refresh={summary} /><MarketPanels key={selected.symbol} symbol={selected.symbol} /></div>}
           </div>
         )}
+      <TradingWorkspace symbol={selected?.symbol ?? null} />
     </>
   )
 }

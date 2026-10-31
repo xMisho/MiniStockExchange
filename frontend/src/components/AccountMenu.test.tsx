@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAuth } from '../auth/authState'
 import { AuthProvider } from '../auth/AuthContext'
 import { AccountMenu } from './AccountMenu'
 import * as api from '../api/auth'
@@ -115,4 +116,24 @@ it('keeps successful logout when the anonymous token refresh fails', async () =>
   show(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
   expect(await screen.findByRole('button', { name: 'Sign in' })).toBeTruthy()
   expect(await screen.findByText(/security token could not refresh/)).toBeTruthy()
+})
+
+it('holds the account steady and disables sign-out while a trading mutation is pending', async () => {
+  let release: (() => void) | undefined
+  function Hold() {
+    const auth = useAuth()
+    return <button type="button" onClick={() => { release = auth.holdSession() }}>Begin trading request</button>
+  }
+  vi.mocked(api.getCurrentUser).mockResolvedValue(user)
+  render(<AuthProvider><AccountMenu /><Hold /></AuthProvider>)
+  await screen.findByText('example')
+  fireEvent.click(screen.getByRole('button', { name: 'Begin trading request' }))
+  const button = screen.getByRole('button', { name: 'Please wait…' }) as HTMLButtonElement
+  expect(button.disabled).toBe(true)
+  fireEvent.click(button)
+  fireEvent.focus(window)
+  expect(api.logout).not.toHaveBeenCalled()
+  expect(api.getCurrentUser).toHaveBeenCalledTimes(1)
+  act(() => release?.())
+  expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(false)
 })

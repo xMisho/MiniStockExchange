@@ -6,6 +6,7 @@ import { getStocks } from '../api/stocks'
 import { getMarketSnapshot } from '../api/marketData'
 import type { MarketSnapshot } from '../types/market'
 
+vi.mock('../components/trading/TradingWorkspace', () => ({ TradingWorkspace: () => null }))
 vi.mock('../components/MarketPanels', () => ({ MarketPanels: () => null }))
 vi.mock('../api/stocks')
 vi.mock('../api/marketData')

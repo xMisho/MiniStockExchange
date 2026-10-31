@@ -2,7 +2,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** V3 backend and the public React market dashboard implemented. Account forms and session management are implemented. Trading controls, live push updates, and deployment are next.
+**Current state:** V3 backend and the public React market dashboard implemented. Account forms and session management are implemented. Order submission, My Orders, and amend/cancel controls are implemented. Live push updates and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -14,7 +14,7 @@ These are milestones of the **same project**, not separate applications or relea
 | --- | --- |
 | **V1 — Matching core** | Price/FIFO priority, partial fills, trades, cancellation, statistics, unique IDs, and thread safety. |
 | **V2 — Multi-stock simulator** | Amendments, multiple stocks, market orders, lifecycle status, indexed lookup, depth, VWAP, OHLC, price changes, simulator, and console dashboard. |
-| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Stock selection, summaries, depth, recent trades, and candlestick charts ready; account registration/login/logout ready; trading controls pending. |
+| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Stock selection, summaries, depth, recent trades, and candlestick charts ready; account registration/login/logout ready; order submission, My Orders, and amend/cancel controls ready. |
 
 Flyway migration numbers (`V1__...`, etc.) are separate from these milestones. The Maven artifact remains `1.0.0-SNAPSHOT`.
 
@@ -75,7 +75,7 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. The header supports registration, login, session restoration, and logout. Trading controls are not implemented yet. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. The header supports registration, login, session restoration, and logout. Authenticated users can submit orders and manage their own paginated history below the market panels. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
 
 Start Spring from the repository root in one terminal:
 
@@ -158,7 +158,7 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
 - No balances, portfolios, settlement, real exchange connectivity, or external price feed.
-- Local development only for now. Trading controls, SSE, Docker deployment, and further production hardening remain planned.
+- Local development only for now. SSE, Docker deployment, and further production hardening remain planned.
 
 ## Detailed guides
 
@@ -321,6 +321,13 @@ Logout returns `204`, invalidates the session, and expires its cookie. Obtain a 
 <summary>API payloads, pagination, candle semantics, and errors</summary>
 
 ##### Stock metadata and trading
+
+The React trading section requires login. Choose BUY/SELL, LIMIT/MARKET, and a positive whole quantity; MARKET disables price and omits it from the request. LIMIT prices accept up to four decimal places. Validated price text is serialized directly as an exact JSON number rather than rounded through JavaScript arithmetic. Successful submission displays the returned order ID/status and filled/remaining shares.
+
+My Orders uses server-side pagination (25 per page) and status filters, including all stocks owned by the caller. It is refreshed manually or after that caller’s mutations; external fills appear on the next history refresh. Open and partially filled LIMIT rows expose amendment and cancellation; terminal orders have no controls. Amendment requires both a new price and a new **remaining** quantity. No trading state is changed optimistically. Successful mutations reload history and request fresh snapshot/depth/trades/candles for the affected stock, queuing that refresh if a read is already in flight.
+
+Mutations are never automatically replayed. A lost response, unreadable success body, or uncertain server result displays a warning and pauses further mutations until the user checks My Orders and explicitly acknowledges that review. This browser safeguard is not an idempotency key and does not survive a page reload. Do not blindly resubmit after reloading either. Failed CSRF preparation sends no mutation. Account changes/sign-out are disabled while an order request is pending; `401` still clears the local session. Admins’ My Orders also shows only their own orders.
+
 
 An authenticated ADMIN can register a stock using JSON:
 

@@ -10,10 +10,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [sessionHolds, setSessionHolds] = useState(0)
   const generation = useRef(0)
+  const holds = useRef(0)
+  const holdSession = useCallback(() => {
+    generation.current++; holds.current++; setSessionHolds(holds.current)
+    let released = false
+    return () => { if (!released) { released = true; holds.current--; setSessionHolds(holds.current) } }
+  }, [])
   const mutation = useRef(false)
   const restore = useCallback(async () => {
-    if (mutation.current) return
+    if (mutation.current || holds.current > 0) return
     const version = ++generation.current
     try {
       const current = await api.getCurrentUser()
@@ -38,16 +45,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     catch { setError('Your session changed, but the security token could not refresh. The next action will request a fresh token.') }
   }
   const signIn = async (username: string, password: string) => {
-    if (mutation.current) return
+    if (mutation.current || holds.current > 0) return
     mutation.current = true; generation.current++; setBusy(true)
     try { const current = await api.login(username, password); setUser(current); setStatus('authenticated'); await rotate() }
     finally { mutation.current = false; setBusy(false) }
   }
   const signOut = async () => {
-    if (mutation.current) return
+    if (mutation.current || holds.current > 0) return
     mutation.current = true; generation.current++; setBusy(true)
     try { await api.logout(); setUser(null); setStatus('anonymous'); await rotate() }
     finally { mutation.current = false; setBusy(false) }
   }
-  return <Context.Provider value={{ user, status, error, busy, signIn, signOut, restore }}>{children}</Context.Provider>
+  return <Context.Provider value={{ user, status, error, busy: busy || sessionHolds > 0, holdSession, signIn, signOut, restore }}>{children}</Context.Provider>
 }

@@ -1,3 +1,4 @@
+import { marketRefreshEvent } from '../utils/marketEvents'
 import { useEffect, useRef, useState } from 'react'
 
 type Resource<T> = { status: 'loading' } | { status: 'error' } | { status: 'ready'; data: T }
@@ -10,6 +11,7 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
   useEffect(() => {
     if (symbol === null) return
     let disposed = false
+    let refreshQueued = false
     let controller: AbortController | null = null
     let lastRequest: AbortController | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -38,7 +40,10 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
       } finally {
         if (controller === request) {
           controller = null
-          if (!disposed && visible()) timer = setTimeout(() => { void run() }, interval)
+          if (!disposed && visible()) {
+            if (refreshQueued) { refreshQueued = false; void run() }
+            else timer = setTimeout(() => { void run() }, interval)
+          }
         }
       }
     }
@@ -49,6 +54,12 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
         controller = null
       } else void run()
     }
+    const marketChanged = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== symbol) return
+      if (controller) refreshQueued = true
+      else void run()
+    }
+    window.addEventListener(marketRefreshEvent, marketChanged)
     retryRef.current = () => { void run() }
     document.addEventListener('visibilitychange', visibilityChanged)
     void run()
@@ -57,6 +68,7 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
       clearTimeout(timer)
       lastRequest?.abort()
       document.removeEventListener('visibilitychange', visibilityChanged)
+      window.removeEventListener(marketRefreshEvent, marketChanged)
       retryRef.current = () => {}
     }
   }, [symbol, load, interval])

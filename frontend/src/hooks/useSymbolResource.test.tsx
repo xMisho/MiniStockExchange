@@ -99,3 +99,21 @@ it('cleans timers and requests in StrictMode and on symbol changes', async () =>
   await tick(20000)
   expect(load).toHaveBeenCalledTimes(count)
 })
+
+it('refreshes the changed market immediately and queues invalidation behind in-flight reads', async () => {
+  const { refreshMarket } = await import('../utils/marketEvents')
+  let resolve!: (value: number) => void
+  const load = vi.fn().mockImplementationOnce(() => new Promise((done) => { resolve = done })).mockResolvedValue(2)
+  const { result } = renderHook(() => useSymbolResource('AAPL', load))
+  act(() => refreshMarket('TSLA'))
+  expect(load).toHaveBeenCalledTimes(1)
+  act(() => refreshMarket('AAPL'))
+  act(() => refreshMarket('AAPL'))
+  expect(load).toHaveBeenCalledTimes(1)
+  await act(async () => resolve(1))
+  expect(load).toHaveBeenCalledTimes(2)
+  expect(result.current.resource).toEqual({ status: 'ready', data: 2 })
+  act(() => refreshMarket('AAPL'))
+  await tick()
+  expect(load).toHaveBeenCalledTimes(3)
+})
