@@ -1,3 +1,4 @@
+import { RefreshStatus } from './RefreshStatus'
 import type { MarketSnapshot, StockMetadata } from '../types/market'
 import { formatChange, formatCount, formatPrice } from '../utils/format'
 
@@ -9,10 +10,11 @@ export type SnapshotState =
 interface Props {
   stock: StockMetadata
   snapshot: SnapshotState | null
+  refresh?: { updatedAt: number | null; refreshError: boolean; refreshing: boolean }
   onRetry: () => void
 }
 
-export function MarketSummary({ stock, snapshot, onRetry }: Props) {
+export function MarketSummary({ stock, snapshot, onRetry, refresh }: Props) {
   const state = snapshot?.symbol === stock.symbol ? snapshot : null
   const data = state?.status === 'ready' ? state.data : null
   const tone = data?.priceChange == null || data.priceChange === 0 ? 'neutral' : data.priceChange > 0 ? 'positive' : 'negative'
@@ -53,9 +55,10 @@ export function MarketSummary({ stock, snapshot, onRetry }: Props) {
             <div><dt>OPEN ORDERS</dt><dd>{formatCount(data.openOrderCount)}</dd></div>
           </dl>
           {data.tradeCount === 0 && <p className="no-executions">No executions yet. Resting quotes may be available; traded prices appear after orders match.</p>}
-          <p className="summary-note">Loaded on selection · Automatic refresh comes later</p>
+          <p className="summary-note">Refreshes every 2 seconds while this tab is visible</p>
         </>
       )}
+      {refresh && <RefreshStatus {...refresh} onRetry={onRetry} />}
     </section>
   )
 }

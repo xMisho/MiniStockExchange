@@ -1,10 +1,11 @@
+import { RefreshStatus } from './RefreshStatus'
 import { getRecentTrades } from '../api/marketData'
 import { useSymbolResource } from '../hooks/useSymbolResource'
 import { formatCount, formatPrice, formatUtcDateTime, formatUtcTime } from '../utils/format'
 import { PanelMessage } from './PanelMessage'
 
 export function RecentTrades({ symbol }: { symbol: string }) {
-  const { resource, retry } = useSymbolResource(symbol, getRecentTrades)
+  const { resource, retry, updatedAt, refreshError, refreshing } = useSymbolResource(symbol, getRecentTrades)
   const trades = resource.status === 'ready' ? resource.data.content : null
   return (
     <section className="data-panel" aria-label={`${symbol} recent trades`}>
@@ -19,6 +20,7 @@ export function RecentTrades({ symbol }: { symbol: string }) {
             </tr>)}</tbody>
           </table>
         )}
+      <RefreshStatus updatedAt={updatedAt} refreshError={refreshError} refreshing={refreshing} onRetry={retry} />
     </section>
   )
 }

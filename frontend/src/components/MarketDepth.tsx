@@ -1,10 +1,11 @@
+import { RefreshStatus } from './RefreshStatus'
 import { getMarketDepth } from '../api/marketData'
 import { useSymbolResource } from '../hooks/useSymbolResource'
 import { formatCount, formatPrice } from '../utils/format'
 import { PanelMessage } from './PanelMessage'
 
 export function MarketDepth({ symbol }: { symbol: string }) {
-  const { resource, retry } = useSymbolResource(symbol, getMarketDepth)
+  const { resource, retry, updatedAt, refreshError, refreshing } = useSymbolResource(symbol, getMarketDepth)
   const depth = resource.status === 'ready' ? resource.data : null
   const rows = depth ? Array.from({ length: Math.max(depth.bids.length, depth.asks.length) }, (_, index) => index) : []
 
@@ -23,6 +24,7 @@ export function MarketDepth({ symbol }: { symbol: string }) {
             </tr>)}</tbody>
           </table><p className="panel-footnote">Aggregated remaining shares at each price.</p></>
         )}
+      <RefreshStatus updatedAt={updatedAt} refreshError={refreshError} refreshing={refreshing} onRetry={retry} />
     </section>
   )
 }

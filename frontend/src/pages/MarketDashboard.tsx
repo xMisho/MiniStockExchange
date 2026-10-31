@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useSymbolResource } from '../hooks/useSymbolResource'
 import { getStocks } from '../api/stocks'
 import { getMarketSnapshot } from '../api/marketData'
 import { StockList } from '../components/StockList'
 import { MarketPanels } from '../components/MarketPanels'
 import { MarketSummary } from '../components/MarketSummary'
-import type { SnapshotState } from '../components/MarketSummary'
 import type { StockMetadata } from '../types/market'
 
 type StockState = { status: 'loading' } | { status: 'error' } | { status: 'ready'; stocks: StockMetadata[] }
@@ -12,9 +12,8 @@ type StockState = { status: 'loading' } | { status: 'error' } | { status: 'ready
 export function MarketDashboard() {
   const [stockState, setStockState] = useState<StockState>({ status: 'loading' })
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
-  const [snapshot, setSnapshot] = useState<SnapshotState | null>(null)
   const [listAttempt, setListAttempt] = useState(0)
-  const [snapshotAttempt, setSnapshotAttempt] = useState(0)
+  const summary = useSymbolResource(selectedSymbol, getMarketSnapshot)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -29,19 +28,6 @@ export function MarketDashboard() {
       })
     return () => controller.abort()
   }, [listAttempt])
-
-  useEffect(() => {
-    if (selectedSymbol === null) return
-    const controller = new AbortController()
-    getMarketSnapshot(selectedSymbol, controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted) setSnapshot({ symbol: selectedSymbol, status: 'ready', data })
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setSnapshot({ symbol: selectedSymbol, status: 'error' })
-      })
-    return () => controller.abort()
-  }, [selectedSymbol, snapshotAttempt])
 
   const stocks = stockState.status === 'ready' ? stockState.stocks : []
   const selected = stocks.find((stock) => stock.symbol === selectedSymbol)
@@ -64,13 +50,9 @@ export function MarketDashboard() {
           <div className="dashboard-grid">
             <StockList stocks={stocks} selectedSymbol={selectedSymbol} onSelect={(symbol) => {
               if (symbol === selectedSymbol) return
-              setSnapshot({ symbol, status: 'loading' })
               setSelectedSymbol(symbol)
             }} />
-            {selected && <div className="market-workspace"><MarketSummary stock={selected} snapshot={snapshot} onRetry={() => {
-              setSnapshot({ symbol: selected.symbol, status: 'loading' })
-              setSnapshotAttempt((value) => value + 1)
-            }} /><MarketPanels key={selected.symbol} symbol={selected.symbol} /></div>}
+            {selected && <div className="market-workspace"><MarketSummary stock={selected} snapshot={selectedSymbol ? { symbol: selectedSymbol, ...summary.resource } : null} onRetry={summary.retry} refresh={summary} /><MarketPanels key={selected.symbol} symbol={selected.symbol} /></div>}
           </div>
         )}
     </>
