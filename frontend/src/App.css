@@ -5,47 +5,86 @@
 .brand-mark span { font-size: 16px; margin-left: -2px; margin-top: -8px; color: #b0d9a9; }
 .environment-label { display: flex; gap: 8px; align-items: center; color: #64716a; font-size: 12px; }
 .environment-label > span { width: 6px; height: 6px; background: #93a38a; border-radius: 50%; }
-.workspace-intro { padding: 76px 0 52px; max-width: 620px; }
-.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #697b6c; margin: 0 0 18px; }
-h1 { font-weight: 500; font-size: clamp(40px, 5.4vw, 66px); line-height: 1.08; letter-spacing: -3px; margin: 0 0 24px; }
-.intro-description { max-width: 460px; font-size: 15px; line-height: 1.8; color: #68736d; }
-.connection-panel { display: grid; grid-template-columns: 1.2fr 1fr; gap: 56px; padding: 36px 40px; border: 1px solid #d4dfd5; background: #fff; border-radius: 16px; box-shadow: 0 6px 20px #24332604; }
-.connection-panel .eyebrow { margin-bottom: 13px; }
-h2 { margin: 0; font-size: 24px; font-weight: 550; letter-spacing: -.8px; }
-.panel-description { color: #728078; font-size: 13px; line-height: 1.8; max-width: 390px; margin: 14px 0 0; }
-.connection-details { border-left: 1px solid #e7eae5; padding-left: 36px; }
-.connection-status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; border-radius: 24px; padding: 8px 11px; background: #f1f3ed; color: #687460; }
-.connection-status.connected { color: #276a4c; background: #eaf5ec; }
-.connection-status.unavailable { color: #8b5b26; background: #fbf1df; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.connection-help { min-height: 45px; font-size: 12px; line-height: 1.75; color: #748078; margin: 13px 0 18px; }
-code { background: #f1f4ef; padding: 2px 4px; border-radius: 4px; color: #36543d; overflow-wrap: anywhere; font-size: 11px; }
-button { display: inline-flex; justify-content: space-between; align-items: center; gap: 24px; background: #254e3e; color: #fff; border: 0; border-radius: 7px; padding: 11px 15px; font-size: 12px; cursor: pointer; transition: background 150ms ease; }
-button:hover { background: #163b2c; }
-button:disabled { opacity: .55; cursor: wait; }
-.next-section { margin: 50px 0 64px; }
-.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.section-heading h2 { font-size: 16px; letter-spacing: -.4px; }
-.section-heading > span { font-size: 11px; color: #8a958d; }
-.milestone-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 23px; gap: 32px; }
-.milestone-grid article { padding-top: 20px; border-top: 1px solid #dce2db; }
-.milestone-number { color: #8b9a8c; font-size: 11px; font-variant-numeric: tabular-nums; }
-h3 { margin: 17px 0 9px; font-size: 14px; font-weight: 600; letter-spacing: -.3px; }
-.milestone-grid p { color: #7a857c; font-size: 12px; line-height: 1.8; margin: 0; max-width: 270px; }
-footer { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid #dce2db; padding: 24px 0 30px; color: #7d887e; font-size: 10px; }
-@media (max-width: 700px) {
-  .app-shell { padding: 0 22px; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #637466; margin: 0 0 16px; }
+.dashboard-intro { padding: 50px 0 34px; }
+h1 { font-weight: 500; font-size: clamp(32px, 4vw, 46px); line-height: 1.15; letter-spacing: -2px; margin: 0 0 14px; }
+.dashboard-intro > p:last-child { color: #67766c; font-size: 14px; line-height: 1.7; margin: 0; }
+h2 { margin: 0; font-size: 22px; font-weight: 550; letter-spacing: -.6px; }
+h3 { font-size: 18px; font-weight: 550; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); gap: 24px; align-items: start; margin-bottom: 54px; }
+.stock-panel, .summary-panel, .page-message { border: 1px solid #d7e0d6; border-radius: 14px; background: white; }
+.stock-panel { padding: 22px 12px 12px; }
+.panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 10px 18px; }
+.panel-heading h2 { font-size: 15px; letter-spacing: -.3px; }
+.panel-heading > span { font-size: 11px; color: #758274; }
+.stock-list { display: grid; gap: 6px; }
+.stock-option { position: relative; display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; gap: 6px; border: 1px solid transparent; border-radius: 8px; padding: 16px 30px 16px 14px; background: transparent; color: #27382b; cursor: pointer; }
+.stock-option:hover { background: #f5f7f3; }
+.stock-option.selected { background: #edf4ec; border-color: #d2e0cf; }
+.stock-symbol { font-size: 14px; font-weight: 650; }
+.stock-company { color: #6b796d; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.stock-arrow { position: absolute; right: 13px; top: 18px; color: #52755a; }
+.summary-panel { min-height: 470px; padding: 32px 36px; }
+.summary-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.summary-heading .eyebrow { margin-bottom: 15px; }
+.summary-heading h2 { font-size: 23px; letter-spacing: -.7px; }
+.company-name { color: #69786d; font-size: 13px; margin: 8px 0 0; }
+.market-label { color: #477256; background: #eff5ed; padding: 7px 10px; border-radius: 20px; font-size: 10px; white-space: nowrap; }
+.price-block { margin: 32px 0 27px; }
+.metric-label, dt { color: #6f7d71; font-size: 10px; font-weight: 600; letter-spacing: 1.1px; }
+.last-price { font-size: clamp(34px, 4vw, 48px); letter-spacing: -1.8px; margin: 8px 0; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.price-change { display: flex; gap: 8px; font-size: 14px; font-weight: 550; margin: 0; font-variant-numeric: tabular-nums; }
+.positive { color: #28734e; }
+.negative { color: #a34545; }
+.neutral { color: #68756d; }
+.reference-note { color: #748174; font-size: 11px; line-height: 1.7; margin: 12px 0 0; }
+dl { margin: 0; }
+dd { margin: 9px 0 0; font-size: 19px; font-weight: 550; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.quote-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 22px 0; border-top: 1px solid #e4e9e1; border-bottom: 1px solid #e4e9e1; gap: 20px; }
+.statistics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 25px 0 22px; }
+dt span { font-size: 9px; font-weight: 400; letter-spacing: 0; }
+.no-executions { font-size: 12px; line-height: 1.8; color: #6b7b6a; background: #f5f7f1; padding: 12px 15px; border-radius: 7px; margin: 4px 0 16px; }
+.summary-note { color: #7c877b; font-size: 10px; line-height: 1.7; margin: 0; }
+.summary-message { padding: 48px 0 24px; color: #617162; }
+.summary-message p, .page-message p { line-height: 1.8; font-size: 14px; }
+.page-message { padding: 40px; margin-bottom: 54px; }
+.primary-button { display: inline-flex; gap: 24px; align-items: center; background: #254e3e; color: white; border: 0; border-radius: 7px; padding: 11px 15px; margin-top: 12px; cursor: pointer; font-size: 12px; }
+.primary-button:hover { background: #163b2c; }
+footer { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid #dce2db; padding: 24px 0 30px; color: #6e7c70; font-size: 10px; }
+@media (max-width: 760px) {
+  .app-shell { padding: 0 20px; }
   .site-header { min-height: 82px; flex-wrap: wrap; padding: 18px 0; }
-  .environment-label { font-size: 10px; }
   .brand { font-size: 15px; }
-  .workspace-intro { padding: 48px 0 32px; }
-  h1 { letter-spacing: -2px; }
-  .connection-panel { grid-template-columns: 1fr; gap: 24px; padding: 26px; }
-  .connection-details { border-left: 0; border-top: 1px solid #e7eae5; padding: 22px 0 0; }
-  .milestone-grid { grid-template-columns: 1fr; gap: 22px; }
-  .milestone-grid p { max-width: none; }
-  .next-section { margin: 36px 0; }
-  .section-heading > span { display: none; }
+  .environment-label { font-size: 10px; }
+  .dashboard-intro { padding: 34px 0 25px; }
+  .dashboard-grid { grid-template-columns: 1fr; gap: 18px; }
+  .summary-panel { padding: 26px 22px; }
+  .stock-list { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
+  .quote-grid { gap: 10px; }
+  .market-label { display: none; }
+  .page-message { padding: 28px; }
   footer { flex-wrap: wrap; }
 }
-@media (prefers-reduced-motion: reduce) { button { transition: none; } }
+
+.market-workspace { display: grid; gap: 24px; min-width: 0; }
+.lower-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.data-panel { min-width: 0; padding: 24px 20px; background: white; border: 1px solid #d7e0d6; border-radius: 14px; }
+.data-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 22px; }
+.data-heading h2 { font-size: 17px; }
+.data-heading > span, .panel-footnote, .chart-attribution { color: #6f7d71; font-size: 10px; line-height: 1.7; }
+.market-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.market-table th { color: #6f7d71; font-size: 10px; font-weight: 550; text-align: right; padding: 0 5px 12px; }
+.market-table td { padding: 10px 5px; text-align: right; border-top: 1px solid #edf1e9; }
+.market-table th:first-child, .market-table td:first-child { text-align: left; padding-left: 0; }
+.panel-message { color: #617162; font-size: 13px; line-height: 1.8; padding: 22px 0; }
+.panel-footnote { margin: 16px 0 0; }
+.candlestick-canvas { height: 300px; width: 100%; min-width: 0; }
+.chart-attribution { margin: 18px 0 0; }
+.chart-attribution a { color: #285c44; }
+.candle-data { margin-top: 20px; font-size: 12px; color: #526958; }
+.candle-data summary { cursor: pointer; padding: 10px 0; }
+.table-scroll { overflow-x: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 1050px) { .lower-panels { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .market-workspace { gap: 18px; } .data-panel { padding: 22px 16px; } }

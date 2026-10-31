@@ -2,7 +2,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** V3 backend and React/TypeScript frontend foundation implemented. The market dashboard, account/trading screens, live web updates, and deployment are next.
+**Current state:** V3 backend and the public React market dashboard implemented. Account/trading screens, live web updates, and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -14,7 +14,7 @@ These are milestones of the **same project**, not separate applications or relea
 | --- | --- |
 | **V1 — Matching core** | Price/FIFO priority, partial fills, trades, cancellation, statistics, unique IDs, and thread safety. |
 | **V2 — Multi-stock simulator** | Amendments, multiple stocks, market orders, lifecycle status, indexed lookup, depth, VWAP, OHLC, price changes, simulator, and console dashboard. |
-| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Frontend foundation ready; full dashboard and trading screens pending. |
+| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Stock selection, summaries, depth, recent trades, and candlestick charts ready; account/trading screens pending. |
 
 Flyway migration numbers (`V1__...`, etc.) are separate from these milestones. The Maven artifact remains `1.0.0-SNAPSHOT`.
 
@@ -75,7 +75,7 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a small backend connection screen. It does not yet display market data or implement login/trading controls. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. Login/trading controls are not implemented yet. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
 
 Start Spring from the repository root in one terminal:
 
@@ -91,7 +91,9 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173**. Vite forwards relative `/api` requests to `http://localhost:8080`; the browser uses the frontend origin, and Spring's existing authentication/CSRF rules remain unchanged. The connection check handles loading, unavailable-backend, timeout, and retry states. A successful health response confirms web-server responsiveness, not database/trading readiness.
+Open **http://localhost:5173**. Vite forwards relative `/api` requests to `http://localhost:8080`; the browser uses the frontend origin, and Spring's existing authentication/CSRF rules remain unchanged. Stock-list and summary requests have loading/error/retry states and an eight-second timeout. An empty list shows a registration prompt. Missing prices display as `—`, zero counters as `0`, and changes use signed green/red formatting. Selecting a different stock cancels the previous request; obsolete responses cannot replace the selected summary. Each panel loads independently on selection, cancels obsolete requests, and retries only its own failures. Trades show explicit UTC times in backend trade-ID order. Charts preserve chronological candles, omit idle minutes, and include an expandable OHLC/volume table. Lightweight Charts provides candlesticks with TradingView attribution (see `frontend/THIRD_PARTY_NOTICES.md`). Data loads on selection and retry only; there is no polling yet.
+
+Frontend code is grouped into `api/` requests/validation, `types/` contracts, `components/` stock list and summary, `pages/` dashboard state, and `utils/` display formatting. API tests run in Node; React interaction tests run in jsdom, including rapid switching and unmount cleanup.
 
 To use a different development backend, copy `frontend/.env.example` to `frontend/.env.local`, set `BACKEND_URL`, and restart Vite. This server-only setting is not bundled into the browser. Frontend env files stay separate from the root `.env`; never place database passwords in `VITE_*` variables.
 
