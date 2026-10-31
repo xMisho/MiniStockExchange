@@ -2,7 +2,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** V3 backend and the public React market dashboard implemented. Account/trading screens, live web updates, and deployment are next.
+**Current state:** V3 backend and the public React market dashboard implemented. Account forms and session management are implemented. Trading controls, live push updates, and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -14,7 +14,7 @@ These are milestones of the **same project**, not separate applications or relea
 | --- | --- |
 | **V1 — Matching core** | Price/FIFO priority, partial fills, trades, cancellation, statistics, unique IDs, and thread safety. |
 | **V2 — Multi-stock simulator** | Amendments, multiple stocks, market orders, lifecycle status, indexed lookup, depth, VWAP, OHLC, price changes, simulator, and console dashboard. |
-| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Stock selection, summaries, depth, recent trades, and candlestick charts ready; account/trading screens pending. |
+| **V3 — Persistent web backend** | PostgreSQL, users, session authentication, admin controls, secured trading APIs, restart recovery, delta persistence, and public market-data APIs. Stock selection, summaries, depth, recent trades, and candlestick charts ready; account registration/login/logout ready; trading controls pending. |
 
 Flyway migration numbers (`V1__...`, etc.) are separate from these milestones. The Maven artifact remains `1.0.0-SNAPSHOT`.
 
@@ -75,7 +75,7 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. Login/trading controls are not implemented yet. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. The header supports registration, login, session restoration, and logout. Trading controls are not implemented yet. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
 
 Start Spring from the repository root in one terminal:
 
@@ -158,7 +158,7 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
 - No balances, portfolios, settlement, real exchange connectivity, or external price feed.
-- Local development only for now. Dashboard/account/trading screens, SSE, Docker deployment, and further production hardening remain planned.
+- Local development only for now. Trading controls, SSE, Docker deployment, and further production hardening remain planned.
 
 ## Detailed guides
 
@@ -260,7 +260,13 @@ Passwords are hashed before storage with PBKDF2-HMAC-SHA256, 600,000 iterations,
 
 Registration creates a `USER`; it does not log the account in. Supplying a role in the registration payload cannot create an administrator.
 
-##### Terminal walkthrough
+##### Browser account flow
+
+Use **Create account** or **Sign in** in the React header. Registration creates a regular user and then prompts for login. The header restores the session with `/api/auth/me` on startup and rechecks it on window focus or when the tab becomes visible; authenticated requests reporting `401` clear the local account state. Network failures show a session-check retry instead of claiming you are logged out. The username and role appear after login. Passwords and tokens are never written to localStorage or sessionStorage; the server manages the session through its HttpOnly cookie.
+
+One shared helper fetches a fresh CSRF token before each mutation; login/logout additionally request a new token after the session changes. Failed mutations are never automatically retried. If the post-login/logout token fetch fails, the completed session change stays visible with a warning; the next mutation obtains its own fresh token.
+
+### Terminal walkthrough
 
 Use the same terminal for these commands so the cookie/token variables stay available. Example credentials below are demonstration data only.
 
