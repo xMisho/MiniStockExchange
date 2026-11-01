@@ -24,3 +24,16 @@ it('reports chart initialization failure without crashing the dashboard', () => 
   render(<CandlestickCanvas symbol="AAPL" candles={candles} onError={onError} />)
   expect(onError).toHaveBeenCalledOnce()
 })
+
+it('updates candles without recreating the chart or resetting its zoom on refresh', () => {
+  mocks.create.mockReturnValue({ addSeries: () => ({ setData: mocks.setData }), timeScale: () => ({ fitContent: mocks.fitContent }), remove: mocks.remove })
+  const onError = vi.fn()
+  const view = render(<CandlestickCanvas symbol="AAPL" candles={candles} onError={onError} />)
+  view.rerender(<CandlestickCanvas symbol="AAPL" candles={[...candles, { ...candles[0], startTime: '2026-10-31T14:33:00Z' }]} onError={onError} />)
+  expect(mocks.create).toHaveBeenCalledOnce()
+  expect(mocks.setData).toHaveBeenCalledTimes(2)
+  expect(mocks.fitContent).toHaveBeenCalledOnce()
+  expect(mocks.remove).not.toHaveBeenCalled()
+  view.unmount()
+  expect(mocks.remove).toHaveBeenCalledOnce()
+})

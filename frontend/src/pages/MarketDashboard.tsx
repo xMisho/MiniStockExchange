@@ -35,11 +35,11 @@ export function MarketDashboard() {
 
   return (
     <>
-      <section className="dashboard-intro" aria-labelledby="dashboard-title">
+      <section id="market" className="dashboard-intro" aria-labelledby="dashboard-title">
         <p className="eyebrow">V3 / MARKET WORKSPACE</p>
         <h1 id="dashboard-title">Your market, at a glance.</h1>
-        <p>Select a stock to explore its current quotes and execution statistics.</p>
-        <a className="text-button trading-link" href="#trading">Trading &amp; My Orders ↓</a>
+        <p className="dashboard-description">Select a stock to explore its current quotes and execution statistics.</p>
+        <nav className="workspace-nav" aria-label="Workspace sections"><a className="text-button" href="#trading">Place an order <span aria-hidden="true">↓</span></a><a href="#my-orders">My Orders <span aria-hidden="true">↓</span></a></nav>
       </section>
       {stockState.status === 'loading' ? <section className="page-message" role="status">Loading registered stocks…</section>
         : stockState.status === 'error' ? (

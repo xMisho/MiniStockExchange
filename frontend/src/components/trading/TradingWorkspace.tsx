@@ -10,11 +10,13 @@ type Notice = { kind: 'success' | 'error' | 'uncertain'; message: string }
 export function TradingWorkspace({ symbol }: { symbol: string | null }) {
   const auth = useAuth()
   if (auth.status === 'loading') return <section className="data-panel" id="trading"><p className="panel-message">Checking your session before enabling trading…</p></section>
-  if (!auth.user) return <section className="data-panel" id="trading"><h2>Trade in your exchange</h2><p className="panel-message">Sign in using the header to place orders and manage My Orders. Public market data remains available.</p></section>
+  if (!auth.user) return <section className="data-panel" id="trading"><h2 id="my-orders">Trade in your exchange</h2><p className="panel-message">Sign in using the header to place orders and manage My Orders. Public market data remains available.</p></section>
   return <AuthenticatedTrading key={auth.user.id} symbol={symbol} authBusy={auth.busy} holdSession={auth.holdSession} />
 }
 function AuthenticatedTrading({ symbol, authBusy, holdSession }: { symbol: string | null; authBusy: boolean; holdSession: () => () => void }) {
   const [busy, setBusy] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const noticeElement = useRef<HTMLDivElement>(null)
   const [blocked, setBlocked] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [page, setPage] = useState(0)
@@ -23,10 +25,15 @@ function AuthenticatedTrading({ symbol, authBusy, holdSession }: { symbol: strin
   const inFlight = useRef(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  useEffect(() => {
+    if (!notice || document.querySelector('dialog[open]')) return
+    noticeElement.current?.scrollIntoView?.({ block: 'nearest' })
+    noticeElement.current?.focus({ preventScroll: true })
+  }, [notice])
   const refreshOrders = () => setRevision((value) => value + 1)
   const perform = async (targetSymbol: string, action: () => Promise<string>, submission = false) => {
     if (inFlight.current || blocked || authBusy) return false
-    inFlight.current = true; setBusy(true); setNotice(null)
+    inFlight.current = true; setBusy(true); setSubmitting(submission); setNotice(null)
     const release = holdSession()
     try {
       const message = await action()
@@ -45,7 +52,7 @@ function AuthenticatedTrading({ symbol, authBusy, holdSession }: { symbol: strin
         else if (error instanceof OrderRequestError && error.status === 409) refreshOrders()
       }
       return false
-    } finally { release(); inFlight.current = false; if (mounted.current) setBusy(false) }
+    } finally { release(); inFlight.current = false; if (mounted.current) { setBusy(false); setSubmitting(false) } }
   }
   const submit = (targetSymbol: string, order: SubmitOrder) => perform(targetSymbol, async () => {
     const result = await submitOrder(targetSymbol, order)
@@ -61,16 +68,16 @@ function AuthenticatedTrading({ symbol, authBusy, holdSession }: { symbol: strin
   })
   const disabled = busy || blocked || authBusy
   return <div className="trading-workspace" id="trading">
-    {notice && <div className={`trading-notice ${notice.kind}`} role={notice.kind === 'success' ? 'status' : 'alert'}>
+    {notice && <div ref={noticeElement} tabIndex={-1} className={`trading-notice ${notice.kind}`} role={notice.kind === 'success' ? 'status' : 'alert'}>
       <p>{notice.message}</p>
       {notice.kind === 'uncertain' && <>
         <p><strong>Do not resubmit blindly.</strong> The request may already have committed. Check My Orders, including filled and cancelled orders, before deciding whether to try again. Mutations are paused until you confirm that review.</p>
-        <button type="button" className="text-button" onClick={() => { setPage(0); setStatus(''); refreshOrders(); document.getElementById('my-orders-title')?.focus() }}>Check My Orders</button>
-        <button type="button" className="text-button" onClick={() => { setBlocked(false); setNotice(null) }}>I have checked My Orders</button>
+        <div className="notice-actions"><button type="button" className="text-button" onClick={() => { setPage(0); setStatus(''); refreshOrders(); document.getElementById('my-orders-title')?.focus() }}>Check My Orders</button>
+        <button type="button" className="text-button" onClick={() => { setBlocked(false); setNotice(null) }}>I have checked My Orders</button></div>
       </>}
     </div>}
     {busy && <p role="status" className="panel-footnote">Waiting for the server to confirm your order action…</p>}
-    {symbol ? <OrderForm key={symbol} symbol={symbol} disabled={disabled} onSubmit={submit} /> : <p className="panel-message">Select a registered stock to place an order.</p>}
-    <MyOrders page={page} status={status} revision={revision} disabled={disabled} onPage={setPage} onStatus={(next) => { setStatus(next); setPage(0) }} onRefresh={refreshOrders} onAmend={amend} onCancel={cancel} />
+    {symbol ? <OrderForm key={symbol} symbol={symbol} disabled={disabled} submitting={submitting} onSubmit={submit} /> : <p className="panel-message">Select a registered stock to place an order.</p>}
+    <MyOrders page={page} status={status} revision={revision} disabled={disabled} pending={busy} feedback={notice && notice.kind !== 'success' ? { message: notice.message, uncertain: notice.kind === 'uncertain' } : undefined} onPage={setPage} onStatus={(next) => { setStatus(next); setPage(0) }} onRefresh={refreshOrders} onAmend={amend} onCancel={cancel} />
   </div>
 }
