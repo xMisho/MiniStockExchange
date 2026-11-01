@@ -2,7 +2,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** V3 backend and the public React market dashboard implemented. Account forms and session management are implemented. Order submission, My Orders, and amend/cancel controls are implemented. Live push updates and deployment are next.
+**Current state:** React dashboard with external AAPL/TSLA quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Live push updates and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -41,7 +41,7 @@ TradingController / MarketDataController
       current book    durable history
 ```
 
-Packages: `auth/` security, `user/` accounts, `stock/` metadata, `trading/` commands/persistence/recovery, and `marketdata/` public read APIs. Root classes contain the matching core, console demo, and Boot entry point. Tests mirror the feature packages.
+Packages: `auth/` security, `user/` accounts, `stock/` metadata, `trading/` commands/persistence/recovery, `marketdata/` local read APIs, and `externalmarket/` isolated Alpaca client/cache/DTOs. External reads never mutate the matching engine or PostgreSQL. Root classes contain the matching core, console demo, and Boot entry point. Tests mirror the feature packages.
 
 ## Quick start
 
@@ -63,7 +63,7 @@ Set `DB_USERNAME`, `DB_PASSWORD`, `DB_URL`, and `DB_TEST_URL` in `.env`; databas
 
 Check `http://localhost:8080/api/health`. Stop with **Ctrl+C**. Use `mvnw.cmd` on Windows.
 
-Fresh databases have no seeded users/stocks/trades. Register an account, promote an administrator explicitly, register stocks, then submit orders. Empty market responses are expected before activity. No external live prices are fetched.
+Fresh databases have no seeded users/stocks/trades. Register an account, promote an administrator explicitly, register stocks, then submit orders. Empty local market responses are expected before sandbox activity. External quotes and charts use the independently configured Alpaca connection below.
 
 For the separate console demo, after building:
 
@@ -75,7 +75,27 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and a public market dashboard. It selects the first registered stock and displays its summary, top-five depth, latest ten trades, and latest hundred one-minute candlesticks. The header supports registration, login, session restoration, and logout. Account and amendment forms use keyboard-accessible dialogs, with Escape/Close and focus restoration. My Orders groups related fields on desktop and switches to readable cards on smaller screens. Authenticated users can submit orders and manage their own paginated history below the market panels. Use **Node 24 LTS** (see `frontend/.nvmrc`). Frontend files stay independent of the Maven backend; there are no Java package or database schema changes in this step.
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). The primary watchlist shows external AAPL/TSLA prices, IEX session statistics, and candlestick/close-price charts. Accounts and local sandbox order management remain available below it.
+
+### External market-data setup
+
+Add your Alpaca credentials to the private **root** `.env`, then restart Spring:
+
+```properties
+ALPACA_API_KEY=your-key
+ALPACA_API_SECRET=your-secret
+```
+
+The alternative names `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` are also supported. Never put provider credentials in frontend files or `VITE_*` variables. The server uses the fixed HTTPS market-data host and IEX feed; it sends credentials in headers and does not call broker order endpoints. Provider keys are not returned by the API.
+
+- Quotes include the latest reported trade and its UTC timestamp, bid/ask, previous session close, change, and session statistics. Closed markets can show the last trading session; polling does not make an old trade current.
+- IEX covers one exchange. Its volume, quotes, and previous close are not consolidated US-market figures.
+- Chart ranges: latest available session (five-minute bars), one month, and one year (daily bars). Historical requests deliberately exclude the newest 15 minutes. Latest-session lookup searches ten calendar days; bars are split adjusted and returned chronologically without invented idle bars.
+- Server caches quotes for 15 seconds and history for 60 seconds, shared across browser requests. Provider failures back off for 60 seconds; the last successful response can be served for up to 15 minutes with an explicit stale warning and fetch timestamp. Without data or credentials, show an error/setup state, never simulated replacement prices.
+- Browser polling pauses in hidden tabs, cancels obsolete requests on stock changes, and preserves chart zoom on refresh. Quote and chart failures are independent.
+- Check provider entitlements and redistribution permissions before public hosting. This integration is configured for local use; it does not establish a brokerage connection.
+
+**Local sandbox orders remain separate:** they match the application's own resting orders, do not route to Alpaca, and do not automatically execute at external quotes. Local book/depth/trades/candles are available in an expandable section. The standalone V2 console is still a third, in-memory demo.
 
 Start Spring from the repository root in one terminal:
 
@@ -91,7 +111,9 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173**. Vite forwards relative `/api` requests to `http://localhost:8080`; the browser uses the frontend origin, and Spring's existing authentication/CSRF rules remain unchanged. Stock-list and summary requests have loading/error/retry states and an eight-second timeout. An empty list shows a registration prompt. Missing prices display as `—`, zero counters as `0`, and changes use signed green/red formatting. Selecting a different stock cancels the previous request; obsolete responses cannot replace the selected summary. Each panel loads independently on selection, cancels obsolete requests, and retries only its own failures. Trades show explicit UTC times in backend trade-ID order. Charts preserve chronological candles, omit idle minutes, and include an expandable OHLC/volume table. Candle refreshes update the existing chart without resetting the zoom. Lightweight Charts provides candlesticks with TradingView attribution (see `frontend/THIRD_PARTY_NOTICES.md`). Summary, depth, and recent trades refresh two seconds after each request completes; candles refresh after ten seconds. Each panel keeps its previous data visible during refresh and shows its last successful UTC update time. Failures show a subtle stale-data warning with a panel-only retry. Requests never overlap within a panel. Hidden tabs pause polling and cancel pending reads; returning to the tab refreshes immediately. Stock switching and unmounting cancel requests and timers. The stock list loads initially or on retry; it is not polled.
+Open **http://localhost:5173**. Vite proxies relative `/api` requests to Spring at `http://localhost:8080`. After changing root credentials, restart Spring; Vite can stay running. Missing values display as `—`, zero counts as `0`, and provider errors have independent retry controls. Charts have candlestick and close-price views, volume bars, UTC timestamps, and an expandable provider-bar table.
+
+Registration/login/logout use existing session and CSRF handling. Forms include accessible dialogs, focus restoration, and a show-password control. My Orders uses server pagination, responsive rows, and backend-confirmed amendments/cancellation. Unknown mutation outcomes require checking history before resubmission; orders are never automatically retried.
 
 Frontend code is grouped into `api/` requests/validation, `types/` contracts, `components/` stock list and summary, `pages/` dashboard state, and `utils/` display formatting. API tests run in Node; React interaction tests run in jsdom, including rapid switching and unmount cleanup.
 
@@ -112,6 +134,9 @@ Public GETs require no login or CSRF. All mutations require CSRF; trading requir
 
 | Method | Path | Access / purpose |
 | --- | --- | --- |
+| GET | `/api/market/instruments` | Public external watchlist and connection configuration status |
+| GET | `/api/market/{symbol}/quote` | Public external Alpaca/IEX quote and source metadata |
+| GET | `/api/market/{symbol}/candles?range=1D` | Public external bars; range `1D`, `1M`, or `1Y` |
 | GET | `/api/health` | Public web health |
 | GET | `/api/auth/csrf` | Public token/header-name lookup |
 | POST | `/api/users` | Public user registration |
@@ -121,10 +146,10 @@ Public GETs require no login or CSRF. All mutations require CSRF; trading requir
 | GET | `/api/stocks` | Public metadata list, sorted by symbol |
 | GET | `/api/stocks/{symbol}` | Public stock metadata |
 | POST | `/api/stocks` | ADMIN-only stock registration |
-| GET | `/api/stocks/{symbol}/snapshot` | Public current market summary |
-| GET | `/api/stocks/{symbol}/depth` | Public aggregated resting quantities |
-| GET | `/api/stocks/{symbol}/trades` | Public paginated committed executions |
-| GET | `/api/stocks/{symbol}/candles` | Public execution-derived one-minute OHLC |
+| GET | `/api/stocks/{symbol}/snapshot` | Public local sandbox summary |
+| GET | `/api/stocks/{symbol}/depth` | Public local sandbox resting quantities |
+| GET | `/api/stocks/{symbol}/trades` | Public local sandbox committed executions |
+| GET | `/api/stocks/{symbol}/candles` | Public local sandbox one-minute OHLC |
 | POST | `/api/stocks/{symbol}/orders` | Authenticated order submission |
 | GET | `/api/orders/me` | Authenticated caller's paginated history |
 | GET | `/api/orders/{id}` | Owner or ADMIN lookup |
@@ -157,7 +182,7 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - A failed mutation may already have committed. On `TRADING_OUTCOME_UNCERTAIN` / `retrySafe: false`, inspect history before retrying. No request-idempotency keys yet.
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
-- No balances, portfolios, settlement, real exchange connectivity, or external price feed.
+- No balances, portfolios, settlement, or broker order routing. External market data does not determine local sandbox fills.
 - Local development only for now. SSE, Docker deployment, and further production hardening remain planned.
 
 ## Detailed guides
@@ -335,7 +360,7 @@ An authenticated ADMIN can register a stock using JSON:
 {"symbol":"AAPL","companyName":"Apple Inc.","referencePrice":100.00}
 ```
 
-This is an illustrative reference price, not a market quote. Symbols normalize to uppercase. Duplicate registration returns `409` and cannot overwrite an existing stock. Prices must fit `NUMERIC(19,4)` exactly; values requiring rounding are rejected. Fresh databases are empty, and the application does not fetch external prices. Reference price is separate from last executed price.
+This is an illustrative reference price, not a market quote. Symbols normalize to uppercase. Duplicate registration returns `409` and cannot overwrite an existing stock. Prices must fit `NUMERIC(19,4)` exactly; values requiring rounding are rejected. Fresh sandbox databases are empty. These stock reference prices and sandbox execution prices are separate from the external Alpaca dashboard feed.
 
 After logging in, this command submits a resting SELL order for an already registered symbol:
 

@@ -59,7 +59,7 @@ it('renders candles and an exact-value table independently of depth errors', asy
   expect(await screen.findByText('Rendered candlesticks')).toBeTruthy()
   fireEvent.click(screen.getByText('View candle data'))
   expect(screen.getByText('105.00')).toBeTruthy()
-  expect(screen.getByText('2026-10-31 14:32:00 UTC')).toBeTruthy()
+  expect(screen.getByRole('cell', { name: '2026-10-31 14:32:00 UTC' })).toBeTruthy()
 })
 
 it('aborts all old requests and ignores late responses after switching symbols', async () => {
@@ -96,4 +96,15 @@ it('ignores a late failure for the previous stock', async () => {
   await screen.findByText(/No candles yet/)
   await act(async () => rejectOld(new Error('late failure')))
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('switches price views without fetching again and shows execution volume', async () => {
+  vi.mocked(getCandles).mockResolvedValue([{ startTime: '2026-11-01T10:00:00Z', open: 100, high: 102, low: 99, close: 101, volume: 20, tradeCount: 3 }])
+  render(<MarketPanels symbol="AAPL" />)
+  await screen.findByText('Rendered candlesticks')
+  fireEvent.click(screen.getByRole('button', { name: 'Close price' }))
+  expect(screen.getByRole('button', { name: 'Close price' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Candlesticks' }).getAttribute('aria-pressed')).toBe('false')
+  expect(screen.getByRole('img', { name: /AAPL executed volume/ })).toBeTruthy()
+  expect(getCandles).toHaveBeenCalledOnce()
 })

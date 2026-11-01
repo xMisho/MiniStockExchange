@@ -1,3 +1,4 @@
+import { PriceValue } from './PriceValue'
 import { RefreshStatus } from './RefreshStatus'
 import type { MarketSnapshot, StockMetadata } from '../types/market'
 import { formatChange, formatCount, formatPrice } from '../utils/format'
@@ -36,7 +37,7 @@ export function MarketSummary({ stock, snapshot, onRetry, refresh }: Props) {
         <>
           <div className="price-block">
             <p className="metric-label">LAST TRADED PRICE</p>
-            <p className="last-price">{formatPrice(data.lastTradedPrice)}</p>
+            <p className="last-price"><PriceValue key={stock.symbol} value={data.lastTradedPrice} /></p>
             <p className={`price-change ${tone}`} aria-label="Price change from reference">
               <span>{formatChange(data.priceChange)}</span>
               <span>({data.priceChangePercent === null ? '—' : `${formatChange(data.priceChangePercent)}%`})</span>

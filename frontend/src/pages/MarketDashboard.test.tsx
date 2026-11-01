@@ -6,6 +6,7 @@ import { getStocks } from '../api/stocks'
 import { getMarketSnapshot } from '../api/marketData'
 import type { MarketSnapshot } from '../types/market'
 
+vi.mock('../components/WatchQuote', () => ({ WatchQuote: () => null }))
 vi.mock('../components/trading/TradingWorkspace', () => ({ TradingWorkspace: () => null }))
 vi.mock('../components/MarketPanels', () => ({ MarketPanels: () => null }))
 vi.mock('../api/stocks')
@@ -111,7 +112,7 @@ it('does not show the previous stock price while a new selection is loading', as
   await screen.findByText('102.48')
   fireEvent.click(screen.getByRole('button', { name: 'ABC Another Company' }))
   expect(screen.queryByText('102.48')).toBeNull()
-  expect(screen.getByRole('status').textContent).toContain('Loading ABC')
+  expect(within(screen.getByRole('region', { name: 'ABC' })).getByRole('status').textContent).toContain('Loading ABC')
 })
 
 it('handles StrictMode cleanup and aborts snapshot requests on unmount', async () => {

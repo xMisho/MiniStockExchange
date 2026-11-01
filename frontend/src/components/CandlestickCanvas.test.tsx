@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { CandlestickCanvas } from './CandlestickCanvas'
 
 const mocks = vi.hoisted(() => ({ setData: vi.fn(), remove: vi.fn(), fitContent: vi.fn(), create: vi.fn() }))
-vi.mock('lightweight-charts', () => ({ CandlestickSeries: {}, ColorType: { Solid: 'solid' }, createChart: mocks.create }))
+vi.mock('lightweight-charts', () => ({ CandlestickSeries: {}, LineSeries: {}, ColorType: { Solid: 'solid' }, createChart: mocks.create }))
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 const candles = [{ startTime: '2026-10-31T14:32:00Z', open: 100, high: 105, low: 99, close: 102, volume: 20, tradeCount: 3 }]
 it('maps OHLC to epoch seconds, sizes responsively and removes the chart on unmount', () => {
@@ -36,4 +36,10 @@ it('updates candles without recreating the chart or resetting its zoom on refres
   expect(mocks.remove).not.toHaveBeenCalled()
   view.unmount()
   expect(mocks.remove).toHaveBeenCalledOnce()
+})
+
+it('maps the close-price chart to actual candle closes', () => {
+  mocks.create.mockReturnValue({ addSeries: () => ({ setData: mocks.setData }), timeScale: () => ({ fitContent: mocks.fitContent }), remove: mocks.remove })
+  render(<CandlestickCanvas symbol="AAPL" candles={candles} mode="line" onError={vi.fn()} />)
+  expect(mocks.setData).toHaveBeenCalledWith([{ time: Date.parse(candles[0].startTime) / 1000, value: 102 }])
 })

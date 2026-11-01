@@ -30,7 +30,7 @@ export function OrderForm({ symbol, disabled, submitting = false, onSubmit }: Pr
   }
   return <section className="data-panel" aria-label="Submit an order" aria-busy={submitting}>
     <div className="data-heading"><div><p className="eyebrow">SIMULATED TRADING</p><h2>Place an order</h2></div><span>{symbol} · No real money</span></div>
-    <form className="trading-form" onSubmit={(event) => { void submit(event) }}>
+    <form className={`trading-form side-${side.toLowerCase()}`} onSubmit={(event) => { void submit(event) }}>
       <fieldset disabled={disabled}>
         <legend className="sr-only">Order details for {symbol}</legend>
         <div className="trading-fields">

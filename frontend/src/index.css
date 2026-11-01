@@ -22,4 +22,4 @@ a { color: inherit; }
 ::selection { background: #d5e9de; }
 
 html { scrollbar-gutter: stable; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

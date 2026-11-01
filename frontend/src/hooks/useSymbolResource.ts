@@ -2,7 +2,7 @@ import { marketRefreshEvent } from '../utils/marketEvents'
 import { useEffect, useRef, useState } from 'react'
 
 type Resource<T> = { status: 'loading' } | { status: 'error' } | { status: 'ready'; data: T }
-type Result<T> = { symbol: string; resource: Resource<T>; updatedAt: number | null; refreshError: boolean; refreshing: boolean }
+type Result<T> = { symbol: string; resource: Resource<T>; updatedAt: number | null; refreshError: boolean; refreshing: boolean; errorMessage: string | null }
 
 export function useSymbolResource<T>(symbol: string | null, load: (symbol: string, signal: AbortSignal) => Promise<T>, interval = 2000) {
   const [result, setResult] = useState<Result<T> | null>(null)
@@ -17,8 +17,8 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
     let timer: ReturnType<typeof setTimeout> | undefined
     let cached: T | undefined
     let updatedAt: number | null = null
-    const publish = (resource: Resource<T>, refreshError = false, refreshing = false) => {
-      if (!disposed) setResult({ symbol, resource, updatedAt, refreshError, refreshing })
+    const publish = (resource: Resource<T>, refreshError = false, refreshing = false, errorMessage: string | null = null) => {
+      if (!disposed) setResult({ symbol, resource, updatedAt, refreshError, refreshing, errorMessage })
     }
     const visible = () => document.visibilityState !== 'hidden'
     const run = async () => {
@@ -34,9 +34,9 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
         cached = data
         updatedAt = Date.now()
         publish({ status: 'ready', data })
-      } catch {
+      } catch (error) {
         if (disposed || request.signal.aborted) return
-        publish(cached === undefined ? { status: 'error' } : { status: 'ready', data: cached }, true)
+        publish(cached === undefined ? { status: 'error' } : { status: 'ready', data: cached }, true, false, error instanceof Error ? error.message : 'Couldn’t refresh market data.')
       } finally {
         if (controller === request) {
           controller = null
@@ -79,6 +79,7 @@ export function useSymbolResource<T>(symbol: string | null, load: (symbol: strin
     updatedAt: current?.updatedAt ?? null,
     refreshError: current?.refreshError ?? false,
     refreshing: current?.refreshing ?? false,
+    errorMessage: current?.errorMessage ?? null,
     retry: () => retryRef.current(),
   }
 }

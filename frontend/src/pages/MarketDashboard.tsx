@@ -1,3 +1,4 @@
+import { UpdateStatus } from '../components/UpdateStatus'
 import { TradingWorkspace } from '../components/trading/TradingWorkspace'
 import { useEffect, useState } from 'react'
 import { useSymbolResource } from '../hooks/useSymbolResource'
@@ -36,7 +37,7 @@ export function MarketDashboard() {
   return (
     <>
       <section id="market" className="dashboard-intro" aria-labelledby="dashboard-title">
-        <p className="eyebrow">V3 / MARKET WORKSPACE</p>
+        <div className="workspace-kicker"><p className="eyebrow">V3 / MARKET WORKSPACE</p>{selectedSymbol && <UpdateStatus state={summary.resource.status} refreshError={summary.refreshError} />}</div>
         <h1 id="dashboard-title">Your market, at a glance.</h1>
         <p className="dashboard-description">Select a stock to explore its current quotes and execution statistics.</p>
         <nav className="workspace-nav" aria-label="Workspace sections"><a className="text-button" href="#trading">Place an order <span aria-hidden="true">↓</span></a><a href="#my-orders">My Orders <span aria-hidden="true">↓</span></a></nav>
@@ -50,7 +51,7 @@ export function MarketDashboard() {
           <section className="page-message"><p className="eyebrow">NO LISTINGS YET</p><h2>No stocks registered</h2><p>An administrator needs to register a stock before this workspace can display market data.</p></section>
         ) : (
           <div className="dashboard-grid">
-            <StockList stocks={stocks} selectedSymbol={selectedSymbol} onSelect={(symbol) => {
+            <StockList stocks={stocks} selectedSymbol={selectedSymbol} snapshot={summary.resource.status === 'ready' ? summary.resource.data : null} onSelect={(symbol) => {
               if (symbol === selectedSymbol) return
               setSelectedSymbol(symbol)
             }} />

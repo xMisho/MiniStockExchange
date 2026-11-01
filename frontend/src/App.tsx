@@ -1,6 +1,6 @@
 import { AuthProvider } from './auth/AuthContext'
 import { AccountMenu } from './components/AccountMenu'
-import { MarketDashboard } from './pages/MarketDashboard'
+import { ExternalMarketDashboard } from './pages/ExternalMarketDashboard'
 import './App.css'
 
 function App() {
@@ -12,8 +12,8 @@ function App() {
         </a>
         <AccountMenu />
       </header>
-      <main id="main-content" tabIndex={-1}><MarketDashboard /></main>
-      <footer><span>MiniStockExchange</span><span>Local simulation · No real-money trading</span></footer>
+      <main id="main-content" tabIndex={-1}><ExternalMarketDashboard /></main>
+      <footer><span>MiniStockExchange</span><span>External market data · Local sandbox orders</span></footer>
     </div></AuthProvider>
   )
 }

@@ -22,4 +22,5 @@ export interface PriceLevel { price: number; quantity: number }
 export interface MarketDepth { symbol: string; bids: PriceLevel[]; asks: PriceLevel[] }
 export interface MarketTrade { tradeId: number; symbol: string; executionPrice: number; quantity: number; executedAt: string }
 export interface TradePage { content: MarketTrade[]; page: number; size: number; totalElements: number; totalPages: number }
-export interface Candle { startTime: string; open: number; high: number; low: number; close: number; volume: number; tradeCount: number }
+export interface ChartCandle { startTime: string; open: number; high: number; low: number; close: number; volume: number }
+export interface Candle extends ChartCandle { tradeCount: number }

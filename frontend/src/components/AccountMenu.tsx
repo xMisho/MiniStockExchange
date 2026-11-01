@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/authState'
 import { register } from '../api/auth'
@@ -10,6 +10,8 @@ export function AccountMenu() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const passwordId = useId()
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -23,9 +25,9 @@ export function AccountMenu() {
         setMode('login'); setMessage('Account created. Sign in with your username.'); setEmail('')
       } else { await auth.signIn(username, password); setMode(null) }
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'The account request failed.') }
-    finally { setPassword(''); setPending(false) }
+    finally { setPassword(''); setShowPassword(false); setPending(false) }
   }
-  const changeMode = (next: 'login' | 'register' | null) => { setMode(next); setPassword(''); setError(null); setMessage(null) }
+  const changeMode = (next: 'login' | 'register' | null) => { setMode(next); setPassword(''); setShowPassword(false); setError(null); setMessage(null) }
   return <div className="account-area">
     {auth.status === 'loading' ? <span>Checking session…</span> : auth.user ? <div className="account-actions">
       <span>{auth.user.username} <span className="account-role">{auth.user.role}</span></span>
@@ -39,7 +41,12 @@ export function AccountMenu() {
       <form className="account-form" aria-busy={pending} onSubmit={(event) => { void submit(event) }}>
         <label>Username<input required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} disabled={pending} /></label>
         {mode === 'register' && <label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={pending} /></label>}
-        <label>Password<input required type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 15 : undefined} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={pending} /></label>
+        <div className="password-field"><label htmlFor={passwordId}>Password</label><div className="password-control">
+          <input id={passwordId} required type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 15 : undefined} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={pending} />
+          <button type="button" className="password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} aria-controls={passwordId} disabled={pending} onClick={() => setShowPassword((value) => !value)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{showPassword && <path d="m3 3 18 18" />}</svg>
+          </button>
+        </div></div>
         {mode === 'register' && <p className="panel-footnote">Use 15–128 characters. Registration creates a regular user account.</p>}
         {error && <p role="alert" className="account-notice">{error}</p>}
         {message && <p role="status" className="account-notice">{message}</p>}
