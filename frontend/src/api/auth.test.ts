@@ -49,3 +49,13 @@ it('signals expired sessions for protected requests, not bad login', async () =>
   expect(expired).toHaveBeenCalledTimes(1)
   unsubscribe()
 })
+
+it('only sends remember-me when explicitly selected', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(response(token)).mockResolvedValueOnce(response(user))
+    .mockResolvedValueOnce(response(token)).mockResolvedValueOnce(response(user))
+  vi.stubGlobal('fetch', fetcher)
+  await login('example', 'password')
+  expect(new URLSearchParams(fetcher.mock.calls[1][1].body).has('remember-me')).toBe(false)
+  await login('example', 'password', true)
+  expect(new URLSearchParams(fetcher.mock.calls[3][1].body).get('remember-me')).toBe('true')
+})

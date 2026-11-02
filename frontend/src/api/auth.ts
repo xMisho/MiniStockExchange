@@ -49,8 +49,8 @@ export async function getCurrentUser(): Promise<User | null> {
   try { return userFrom(await (await request('/api/auth/me')).json()) }
   catch (error) { if (error instanceof AuthError && error.status === 401) return null; throw error }
 }
-export async function login(username: string, password: string) {
-  return userFrom(await (await csrfRequest('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username, password }).toString() }, false)).json())
+export async function login(username: string, password: string, rememberMe = false) {
+  return userFrom(await (await csrfRequest('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username, password, ...(rememberMe ? { 'remember-me': 'true' } : {}) }).toString() }, false)).json())
 }
 export async function register(username: string, email: string, password: string) {
   return userFrom(await (await csrfRequest('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password }) }, false)).json())

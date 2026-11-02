@@ -16,7 +16,7 @@ import tools.jackson.databind.ObjectMapper;
 public class SecurityConfiguration {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, ObjectMapper json)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, ObjectMapper json, RememberedLoginService rememberedLogin)
             throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
@@ -54,9 +54,12 @@ public class SecurityConfiguration {
                             response.setContentType("application/json");
                             response.getWriter().write("{\"error\":\"Invalid username or password.\"}");
                         }))
+                .rememberMe(remember -> remember
+                        .rememberMeServices(rememberedLogin)
+                        .key(rememberedLogin.getKey()))
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
-                        .deleteCookies("JSESSIONID")
+                        .deleteCookies("JSESSIONID", "VERDEX_REMEMBER_ME")
                         .logoutSuccessHandler((request, response, authentication) -> response.setStatus(204)))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable);

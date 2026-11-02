@@ -43,6 +43,11 @@ class AuthenticationTest {
     @Autowired
     private ObjectMapper json;
 
+    @Autowired
+    private com.misho.exchange.user.DatabaseUserDetailsService details;
+    @Autowired
+    private RememberMeTokenRepository rememberedTokens;
+
     @LocalServerPort
     private int port;
 
@@ -240,6 +245,75 @@ class AuthenticationTest {
         assertEquals(403, browser.postWithToken("/api/auth/logout", "", "application/json", null).statusCode());
         assertEquals(200, browser.get("/api/auth/me").statusCode());
         assertEquals(204, browser.logout().statusCode());
+    }
+
+    @Test
+    void rememberedLoginIsOptInAndPersistsAcrossANewSession() throws Exception {
+        String username = account(true);
+        var ordinary = client();
+        assertEquals(200, ordinary.login(username, PASSWORD).statusCode());
+        assertEquals(null, ordinary.cookie("VERDEX_REMEMBER_ME"));
+        var browser = client();
+        var response = browser.login(username, PASSWORD, true);
+        assertEquals(200, response.statusCode());
+        String cookie = browser.cookie("VERDEX_REMEMBER_ME");
+        assertNotNull(cookie);
+        String headers = String.join(";", response.headers().allValues("Set-Cookie")).toLowerCase(Locale.ROOT);
+        assertTrue(headers.contains("max-age=1209600"));
+        assertTrue(headers.contains("httponly"));
+        assertTrue(headers.contains("samesite=lax"));
+        String token = jdbc.queryForObject("SELECT token FROM exchange.persistent_logins WHERE username = ?", String.class, username);
+        browser.forgetSessionCookie();
+        assertEquals(200, browser.get("/api/stocks").statusCode());
+        assertEquals(token, jdbc.queryForObject("SELECT token FROM exchange.persistent_logins WHERE username = ?", String.class, username));
+        var restored = browser.get("/api/auth/me");
+        assertEquals(200, restored.statusCode());
+        assertEquals("ADMIN", json.readTree(restored.body()).get("role").asText());
+        assertNotEquals(token, jdbc.queryForObject("SELECT token FROM exchange.persistent_logins WHERE username = ?", String.class, username));
+        assertNotNull(browser.sessionId());
+        assertEquals(403, browser.postWithToken("/api/stocks", stockBody(), "application/json", null).statusCode());
+        browser.refreshCsrf();
+        assertEquals(201, browser.postJson("/api/stocks", stockBody()).statusCode());
+        String rotated = browser.cookie("VERDEX_REMEMBER_ME");
+        assertEquals(204, browser.logout().statusCode());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM exchange.persistent_logins WHERE username = ?", Integer.class, username));
+        assertEquals(401, replayRememberedCookie(rotated).statusCode());
+    }
+
+    @Test
+    void expiredTamperedAndInvalidCredentialsCannotRestoreRememberedLogin() throws Exception {
+        String username = account(false);
+        var browser = client();
+        assertEquals(401, browser.login(username, "WrongPassword123!", true).statusCode());
+        assertEquals(null, browser.cookie("VERDEX_REMEMBER_ME"));
+        assertEquals(200, browser.login(username, PASSWORD, true).statusCode());
+        String cookie = browser.cookie("VERDEX_REMEMBER_ME");
+        assertEquals(401, replayRememberedCookie(cookie + "tampered").statusCode());
+        assertEquals(200, browser.login(username, PASSWORD, true).statusCode());
+        jdbc.update("UPDATE exchange.persistent_logins SET last_used = CURRENT_TIMESTAMP - INTERVAL '15 days' WHERE username = ?", username);
+        browser.forgetSessionCookie();
+        assertEquals(401, browser.get("/api/auth/me").statusCode());
+    }
+
+    @Test
+    void storedRememberedLoginWorksWithAFreshServiceInstance() throws Exception {
+        String username = account(false);
+        var browser = client();
+        assertEquals(200, browser.login(username, PASSWORD, true).statusCode());
+        var freshService = new RememberedLoginService(details, rememberedTokens, new org.springframework.mock.env.MockEnvironment());
+        var request = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/auth/me");
+        request.setServletPath("/api/auth/me");
+        request.setCookies(new jakarta.servlet.http.Cookie("VERDEX_REMEMBER_ME", browser.cookie("VERDEX_REMEMBER_ME")));
+        var authentication = freshService.autoLogin(request, new org.springframework.mock.web.MockHttpServletResponse());
+        assertNotNull(authentication);
+        assertEquals(username, authentication.getName());
+        assertEquals(200, browser.login(username, PASSWORD, false).statusCode());
+        assertEquals(null, browser.cookie("VERDEX_REMEMBER_ME"));
+    }
+
+    private HttpResponse<String> replayRememberedCookie(String cookie) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me"))
+                .header("Cookie", "VERDEX_REMEMBER_ME=" + cookie).GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> replaySession(String sessionId) throws Exception {

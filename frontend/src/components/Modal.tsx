@@ -24,7 +24,7 @@ export function Modal({ title, description, busy = false, onClose, children }: P
   }, [])
   return <dialog ref={dialog} className="modal" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
     onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
-    <div className="modal-heading"><div><p className="eyebrow">MINISTOCKEXCHANGE</p><h2 id={titleId}>{title}</h2></div>
+    <div className="modal-heading"><div><p className="eyebrow">VERDEX</p><h2 id={titleId}>{title}</h2></div>
       <button type="button" className="text-button" disabled={busy} onClick={onClose} aria-label="Close dialog">Close</button></div>
     {description && <p className="modal-description" id={descriptionId}>{description}</p>}
     {children}

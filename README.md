@@ -1,4 +1,6 @@
-# MiniStockExchange
+# Verdex · MiniStockExchange
+
+**Verdex** (Verde + index) is the web interface for this project. The Java packages, Maven artifact, and repository retain the MiniStockExchange name.
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
@@ -75,7 +77,9 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). The primary watchlist shows external AAPL/TSLA prices, IEX session statistics, and candlestick/close-price charts. Accounts and local sandbox order management remain available below it.
+Chart wheel gestures scroll the page. Drag pans the chart; explicit +/− and Reset view buttons control its scale. Vertical touch gestures also remain available for page scrolling.
+
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). The app shell separates **Markets**, **Local Exchange**, and **My Orders**, with active navigation and browser back/forward support. Markets shows external AAPL/TSLA prices, IEX session statistics, and candlestick/close-price charts. Local Exchange puts its local chart beside order entry, followed by local depth/trades and order history. My Orders provides a dedicated history view. Trading state stays mounted across view changes, preserving drafts, in-flight requests, and uncertainty blocks. Successful actions show dismissible eight-second notifications; uncertain outcomes remain visible until reviewed.
 
 ### External market-data setup
 
@@ -95,7 +99,7 @@ The alternative names `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` are also s
 - Browser polling pauses in hidden tabs, cancels obsolete requests on stock changes, and preserves chart zoom on refresh. Quote and chart failures are independent.
 - Check provider entitlements and redistribution permissions before public hosting. This integration is configured for local use; it does not establish a brokerage connection.
 
-**Local sandbox orders remain separate:** they match the application's own resting orders, do not route to Alpaca, and do not automatically execute at external quotes. Local book/depth/trades/candles are available in an expandable section. The standalone V2 console is still a third, in-memory demo.
+**Local sandbox orders remain separate:** they match the application's own resting orders, do not route to Alpaca, and do not automatically execute at external quotes. Local book/depth/trades/candles are in the separate Local Exchange view. The standalone V2 console is still a third, in-memory demo.
 
 Start Spring from the repository root in one terminal:
 
@@ -287,7 +291,7 @@ Registration creates a `USER`; it does not log the account in. Supplying a role 
 
 ##### Browser account flow
 
-Use **Create account** or **Sign in** in the React header. Registration creates a regular user and then prompts for login. The header restores the session with `/api/auth/me` on startup and rechecks it on window focus or when the tab becomes visible; authenticated requests reporting `401` clear the local account state. Network failures show a session-check retry instead of claiming you are logged out. The username and role appear after login. Passwords and tokens are never written to localStorage or sessionStorage; the server manages the session through its HttpOnly cookie.
+Use **Create account** or **Sign in** in the React header. Registration creates a regular user and then prompts for login. The header restores the session with `/api/auth/me` on startup and rechecks it on window focus or when the tab becomes visible; authenticated requests reporting `401` clear the local account state. Network failures show a session-check retry instead of claiming you are logged out. The username and role appear after login. Passwords and tokens are never written to localStorage or sessionStorage; the server manages cookies. **Remember me for 14 days** is opt-in and unchecked by default. It issues a persistent HttpOnly, SameSite=Lax cookie with opaque random tokens stored in `exchange.persistent_logins`. The cookie uses the same `SESSION_COOKIE_SECURE` setting as sessions. Logout clears it and revokes the user’s remembered tokens. Automatic restoration runs through `GET /api/auth/me`, reloads current roles, rotates the token, and creates a fresh session; public dashboard requests do not consume or rotate it. Tampered/replayed tokens are rejected. Remembered-login tokens expire after 14 days without restoration; expired rows are pruned when new tokens are issued. A later login without the checkbox clears that browser’s remembered cookie.
 
 One shared helper fetches a fresh CSRF token before each mutation; login/logout additionally request a new token after the session changes. Failed mutations are never automatically retried. If the post-login/logout token fetch fails, the completed session change stays visible with a warning; the next mutation obtains its own fresh token.
 
@@ -338,7 +342,7 @@ curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST http://localhost:8080/api/auth
 rm "$COOKIE_JAR"
 ```
 
-Logout returns `204`, invalidates the session, and expires its cookie. Obtain a fresh anonymous token before logging in or registering again. Cookies are HttpOnly and SameSite=Lax, sessions expire after 30 minutes of inactivity, and sessions do not survive server restarts. URL session tracking and HTTP Basic are disabled.
+Logout returns `204`, invalidates the session, and expires its cookie. Obtain a fresh anonymous token before logging in or registering again. Cookies are HttpOnly and SameSite=Lax, sessions expire after 30 minutes of inactivity, and sessions do not survive server restarts. An opted-in remembered-login cookie can restore a new session through `/api/auth/me` after expiry or restart; it never stores your password. Fresh CSRF tokens are still required for writes. URL session tracking and HTTP Basic are disabled.
 
 </details>
 
@@ -522,7 +526,7 @@ Startup restores active LIMIT orders by `priority_sequence`, not creation time, 
 
 Original quantity remains historical after amendments, so it need not equal filled plus remaining. CANCELLED orders retain unfilled remaining quantity. Trade foreign keys enforce distinct BUY/SELL orders for the same stock. Order versions reject stale database updates. Engine fills use checked integer addition.
 
-Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
+Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
 
 This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
 

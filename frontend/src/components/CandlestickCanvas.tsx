@@ -19,6 +19,8 @@ export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }
       chart = createChart(container.current, {
         autoSize: true,
         height: 300,
+        handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+        handleScale: { mouseWheel: false, pinch: true },
         layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#68786d', attributionLogo: true },
         grid: { vertLines: { color: '#f0f3ec' }, horzLines: { color: '#f0f3ec' } },
         timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#dce2db',
@@ -50,5 +52,21 @@ export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }
     } catch { onError() }
   }, [candles, symbol, onError, mode])
 
-  return <div ref={container} className="candlestick-canvas" role="img" aria-label={`${symbol} ${mode === 'line' ? 'one-minute closing prices' : 'one-minute OHLC candlesticks'}, UTC time. Exact values are in the candle data table below.`} />
+  const zoom = (factor: number) => {
+    const scale = chartRef.current?.timeScale()
+    const range = scale?.getVisibleLogicalRange()
+    if (!scale || !range) return
+    const center = (range.from + range.to) / 2
+    const span = Math.max(2, Math.min((range.to - range.from) * factor, Math.max(candles.length, 10) * 2))
+    scale.setVisibleLogicalRange({ from: center - span / 2, to: center + span / 2 })
+  }
+
+  return <>
+    <div className="chart-switch" role="group" aria-label={`${symbol} chart navigation`}>
+      <button type="button" aria-label="Zoom in" onClick={() => zoom(0.75)}>+</button>
+      <button type="button" aria-label="Zoom out" onClick={() => zoom(1 / 0.75)}>−</button>
+      <button type="button" onClick={() => chartRef.current?.timeScale().fitContent()}>Reset view</button>
+    </div>
+    <div ref={container} className="candlestick-canvas" role="img" aria-label={`${symbol} ${mode === 'line' ? 'closing prices' : 'OHLC candlesticks'}, UTC time. Drag to pan; use the zoom buttons to change scale. Exact values are in the candle data table below.`} />
+  </>
 }

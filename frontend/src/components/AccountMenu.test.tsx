@@ -168,3 +168,12 @@ it('supports password visibility during registration too', async () => {
   expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('text')
   expect(api.register).not.toHaveBeenCalled()
 })
+
+it('offers an unchecked remembered-login choice and forwards the user selection', async () => {
+  show(); await openLogin(); fillLogin()
+  const checkbox = screen.getByRole('checkbox', { name: /Remember me for 14 days/ })
+  expect(checkbox).toHaveProperty('checked', false)
+  fireEvent.click(checkbox)
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in to account' }))
+  await waitFor(() => expect(api.login).toHaveBeenCalledWith('example', 'ExamplePassword123!', true))
+})

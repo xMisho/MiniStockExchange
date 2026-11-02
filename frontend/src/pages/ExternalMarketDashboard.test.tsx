@@ -13,7 +13,8 @@ it('shows setup without substituting simulated prices when credentials are missi
   render(<ExternalMarketDashboard />)
   expect(await screen.findByText('Connect Alpaca to load real prices')).toBeTruthy()
   expect(getExternalQuote).not.toHaveBeenCalled()
-  expect(screen.getByText(/not routed to Alpaca/)).toBeTruthy()
+  expect(screen.queryByText('Local trading form')).toBeNull()
+  expect(screen.getByRole('heading', { name: 'Your market, at a glance.' })).toBeTruthy()
 })
 it('switches independent provider quotes and charts and identifies provenance', async () => {
   vi.mocked(getMarketConnection).mockResolvedValue({ provider: 'Alpaca', feed: 'IEX', configured: true, instruments })

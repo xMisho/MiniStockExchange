@@ -230,3 +230,44 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .sandbox-market[open] { display: grid; gap: 20px; }
 .sandbox-market .candle-panel { margin-top: 20px; }
 @media (max-width: 420px) { .chart-controls .chart-switch button { padding-inline: 7px; font-size: 11px; } }
+
+[hidden] { display: none !important; }
+.app-header { gap: 28px; }
+.primary-nav { display: flex; gap: 6px; margin-right: auto; }
+.primary-nav a { color: var(--muted); padding: 12px 16px; border-radius: 7px; text-decoration: none; font-size: 14px; white-space: nowrap; }
+.primary-nav a[aria-current="page"] { color: var(--forest); background: #e8f0e6; font-weight: 650; }
+.primary-nav a:hover { background: #edf2e9; }
+.brand-origin { color: var(--muted); font-weight: 400; }
+.local-intro { padding-block: 38px 24px; }
+.local-ticker { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; padding: 22px 24px; background: white; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 22px; }
+.local-ticker label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.local-ticker select { max-width: 100%; padding: 9px 12px; background: #f6f8f3; border: 1px solid var(--border); border-radius: 6px; color: var(--ink); }
+.local-ticker > div { display: grid; gap: 7px; }
+.local-ticker > div > strong { font-size: 18px; }
+.local-terminal-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 22px; align-items: start; }
+.terminal-chart, .terminal-ticket, .terminal-book { min-width: 0; }
+.terminal-book { grid-column: 1 / -1; }
+.terminal-ticket .trading-fields { grid-template-columns: 1fr 1fr; gap: 14px; }
+.terminal-ticket .form-actions { align-items: stretch; flex-direction: column; }
+.terminal-ticket .data-heading { align-items: start; flex-direction: column; gap: 10px; }
+.workspace-orders { position: relative; }
+.orders-view-link { display: inline-block; margin: 0 0 12px; }
+.action-toast { position: fixed; z-index: 80; right: 24px; bottom: 24px; max-width: min(440px, calc(100vw - 32px)); margin: 0; box-shadow: 0 8px 30px #173e2920; display: flex; gap: 12px; align-items: center; }
+.action-toast p { margin: 0; }
+.guest-local-panels { display: grid; gap: 22px; margin-bottom: 22px; }
+@media (max-width: 900px) { .app-header { flex-wrap: wrap; gap: 12px; padding-block: 18px; } .primary-nav { order: 3; width: 100%; margin: 0; } .local-terminal-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .primary-nav { gap: 2px; justify-content: space-between; } .primary-nav a { padding: 10px 8px; font-size: 12px; } .local-ticker { padding: 18px; gap: 18px; } .local-ticker label { width: 100%; } .local-ticker select { width: 100%; } .terminal-ticket .trading-fields { grid-template-columns: 1fr; } .action-toast { right: 16px; bottom: 16px; } }
+
+.primary-nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--forest); background: #e1eddf; }
+.local-ticker .local-last > strong { font-size: 30px; letter-spacing: -.8px; line-height: 1.1; }
+.local-ticker .local-last { padding-right: 24px; border-right: 1px solid var(--border); }
+.trading-form.side-buy .primary-button { background: #246943; border-color: #246943; }
+.trading-form.side-buy .primary-button:hover:not(:disabled) { background: #1b5134; }
+.trading-form.side-sell .primary-button { background: #a13d3d; border-color: #a13d3d; }
+.trading-form.side-sell .primary-button:hover:not(:disabled) { background: #842f2f; }
+.account-form .remember-choice { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.account-form .remember-choice input { width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--forest); flex-shrink: 0; }
+.remember-choice small { display: block; color: var(--muted); font-size: 11px; margin-top: 5px; }
+@media (max-width: 480px) { .local-ticker .local-last { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 16px; } }
+.account-form .remember-choice { min-height: 44px; }
+.account-form .remember-choice input { padding: 0; }

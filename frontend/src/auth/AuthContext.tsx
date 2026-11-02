@@ -44,10 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { await api.refreshCsrf(); setError(null) }
     catch { setError('Your session changed, but the security token could not refresh. The next action will request a fresh token.') }
   }
-  const signIn = async (username: string, password: string) => {
+  const signIn = async (username: string, password: string, rememberMe = false) => {
     if (mutation.current || holds.current > 0) return
     mutation.current = true; generation.current++; setBusy(true)
-    try { const current = await api.login(username, password); setUser(current); setStatus('authenticated'); await rotate() }
+    try { const current = await api.login(username, password, rememberMe); setUser(current); setStatus('authenticated'); await rotate() }
     finally { mutation.current = false; setBusy(false) }
   }
   const signOut = async () => {

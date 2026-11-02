@@ -10,6 +10,7 @@ export function AccountMenu() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const passwordId = useId()
   const [pending, setPending] = useState(false)
@@ -23,11 +24,11 @@ export function AccountMenu() {
       if (mode === 'register') {
         await register(username, email, password)
         setMode('login'); setMessage('Account created. Sign in with your username.'); setEmail('')
-      } else { await auth.signIn(username, password); setMode(null) }
+      } else { await auth.signIn(username, password, rememberMe); setMode(null) }
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'The account request failed.') }
     finally { setPassword(''); setShowPassword(false); setPending(false) }
   }
-  const changeMode = (next: 'login' | 'register' | null) => { setMode(next); setPassword(''); setShowPassword(false); setError(null); setMessage(null) }
+  const changeMode = (next: 'login' | 'register' | null) => { setMode(next); setRememberMe(false); setPassword(''); setShowPassword(false); setError(null); setMessage(null) }
   return <div className="account-area">
     {auth.status === 'loading' ? <span>Checking session…</span> : auth.user ? <div className="account-actions">
       <span>{auth.user.username} <span className="account-role">{auth.user.role}</span></span>
@@ -47,6 +48,7 @@ export function AccountMenu() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{showPassword && <path d="m3 3 18 18" />}</svg>
           </button>
         </div></div>
+        {mode === 'login' && <label className="remember-choice"><input type="checkbox" checked={rememberMe} disabled={pending || auth.busy} onChange={event => setRememberMe(event.target.checked)} /><span>Remember me for 14 days<small>Use only on a device you trust.</small></span></label>}
         {mode === 'register' && <p className="panel-footnote">Use 15–128 characters. Registration creates a regular user account.</p>}
         {error && <p role="alert" className="account-notice">{error}</p>}
         {message && <p role="status" className="account-notice">{message}</p>}

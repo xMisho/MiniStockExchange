@@ -70,9 +70,13 @@ public class ApiTestClient {
     }
 
     public HttpResponse<String> login(String username, String password) throws Exception {
+        return login(username, password, false);
+    }
+
+    public HttpResponse<String> login(String username, String password, boolean rememberMe) throws Exception {
         ensureCsrf();
         String body = "username=" + URLEncoder.encode(username, StandardCharsets.UTF_8)
-                + "&password=" + URLEncoder.encode(password, StandardCharsets.UTF_8);
+                + "&password=" + URLEncoder.encode(password, StandardCharsets.UTF_8) + (rememberMe ? "&remember-me=true" : "");
         HttpResponse<String> response = postWithToken("/api/auth/login", body,
                 "application/x-www-form-urlencoded", csrfToken);
         if (response.statusCode() == 200) {
@@ -86,6 +90,18 @@ public class ApiTestClient {
         HttpResponse<String> response = postWithToken("/api/auth/logout", "", "application/json", csrfToken);
         csrfToken = null;
         return response;
+    }
+
+    public void forgetSessionCookie() {
+        cookies.getCookieStore().getURIs().forEach(uri -> cookies.getCookieStore().get(uri).stream()
+                .filter(cookie -> cookie.getName().equals("JSESSIONID"))
+                .toList().forEach(cookie -> cookies.getCookieStore().remove(uri, cookie)));
+        csrfToken = null;
+    }
+
+    public String cookie(String name) {
+        return cookies.getCookieStore().getCookies().stream().filter(cookie -> cookie.getName().equals(name))
+                .map(cookie -> cookie.getValue()).findFirst().orElse(null);
     }
 
     public String sessionId() {
