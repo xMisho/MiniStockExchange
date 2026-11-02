@@ -23,12 +23,17 @@ it('surfaces configuration and provider failures', async () => {
 })
 it('validates historical order and OHLC rather than sorting malformed bars', async () => {
   const bar = { startTime: '2026-10-30T19:00:00Z', open: 100, high: 103, low: 99, close: 102, volume: 20, tradeCount: 2 }
-  response(wrap({ symbol: 'AAPL', range: '1M', interval: '1Day', delayMinutes: 15, adjustment: 'split', candles: [bar, bar] }))
+  response(wrap({ symbol: 'AAPL', range: '1M', interval: '1Hour', delayMinutes: 15, adjustment: 'split', candles: [bar, bar] }))
   await expect(getExternalHistory('history:AAPL:1M')).rejects.toThrow('Invalid external chart')
 })
 it('accepts a configured-independent watchlist and empty provider history', async () => {
   response({ provider: 'Alpaca', feed: 'IEX', configured: false, instruments: [{ symbol: 'AAPL', companyName: 'Apple Inc.', currency: 'USD' }] })
   expect((await getMarketConnection()).configured).toBe(false)
-  response(wrap({ symbol: 'AAPL', range: '1D', interval: '5Min', delayMinutes: 15, adjustment: 'split', candles: [] }))
+  response(wrap({ symbol: 'AAPL', range: '1D', interval: '1Min', delayMinutes: 15, adjustment: 'split', candles: [] }))
   expect((await getExternalHistory('history:AAPL:1D')).data.candles).toEqual([])
+})
+
+it.each([['1D', '1Min'], ['1M', '1Hour'], ['1Y', '1Day']])('accepts the correct provider resolution for %s', async (range, interval) => {
+  response(wrap({ symbol: 'AAPL', range, interval, delayMinutes: 15, adjustment: 'split', candles: [] }))
+  expect((await getExternalHistory(`history:AAPL:${range}`)).data.interval).toBe(interval)
 })

@@ -4,7 +4,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** React dashboard with external AAPL/TSLA quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Live push updates and deployment are next.
+**Current state:** React dashboard with searchable external stock quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Symbol search, saved watchlists, in-app alerts, a local paper portfolio, admin stock registration, and a market-session indicator are implemented. Live push updates and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
@@ -77,7 +77,7 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 ## Frontend development
 
-Chart wheel gestures scroll the page. Drag pans the chart; explicit +/− and Reset view buttons control its scale. Vertical touch gestures also remain available for page scrolling.
+All external chart ranges fit their real available bars across the panel on initial load and Reset view. Polling preserves the user’s zoom; sparse latest-session data still shows a limited-data notice. No fake trades or idle bars are added. Chart wheel gestures scroll the page. Drag pans the chart; explicit +/− and Reset view buttons control its scale. Vertical touch gestures also remain available for page scrolling.
 
 The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). The app shell separates **Markets**, **Local Exchange**, and **My Orders**, with active navigation and browser back/forward support. Markets shows external AAPL/TSLA prices, IEX session statistics, and candlestick/close-price charts. Local Exchange puts its local chart beside order entry, followed by local depth/trades and order history. My Orders provides a dedicated history view. Trading state stays mounted across view changes, preserving drafts, in-flight requests, and uncertainty blocks. Successful actions show dismissible eight-second notifications; uncertain outcomes remain visible until reviewed.
 
@@ -94,8 +94,10 @@ The alternative names `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` are also s
 
 - Quotes include the latest reported trade and its UTC timestamp, bid/ask, previous session close, change, and session statistics. Closed markets can show the last trading session; polling does not make an old trade current.
 - IEX covers one exchange. Its volume, quotes, and previous close are not consolidated US-market figures.
-- Chart ranges: latest available session (five-minute bars), one month, and one year (daily bars). Historical requests deliberately exclude the newest 15 minutes. Latest-session lookup searches ten calendar days; bars are split adjusted and returned chronologically without invented idle bars.
-- Server caches quotes for 15 seconds and history for 60 seconds, shared across browser requests. Provider failures back off for 60 seconds; the last successful response can be served for up to 15 minutes with an explicit stale warning and fetch timestamp. Without data or credentials, show an error/setup state, never simulated replacement prices.
+- Chart ranges: latest available session (one-minute bars), one month (hourly bars), and one year (daily bars). Historical requests deliberately exclude the newest 15 minutes. Latest-session lookup searches ten calendar days; bars are split adjusted and returned chronologically without invented idle bars.
+- Symbol search uses Alpaca’s active, tradable US-equity catalog, cached for 12 hours. The paper-account `/v2/assets`, `/v2/clock`, and `/v2/calendar` endpoints are used read-only; no provider orders are submitted. Search returns at most 20 results, and symbols are verified against this catalog.
+- Session status uses provider clock/calendar data, including holidays and early closes, with America/New_York timezone conversion. Extended-hours labels describe time outside the regular session; they do not guarantee IEX data availability.
+- Server caches quotes for 15 seconds and history for 60 seconds, shared across browser requests. The shared response cache is capped at 256 entries and provider requests at 150 per minute per backend instance. At most six watchlist preview cards poll quotes. Provider failures back off for 60 seconds; the last successful response can be served for up to 15 minutes with an explicit stale warning and fetch timestamp. Without data or credentials, show an error/setup state, never simulated replacement prices.
 - Browser polling pauses in hidden tabs, cancels obsolete requests on stock changes, and preserves chart zoom on refresh. Quote and chart failures are independent.
 - Check provider entitlements and redistribution permissions before public hosting. This integration is configured for local use; it does not establish a brokerage connection.
 
@@ -115,7 +117,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173**. Vite proxies relative `/api` requests to Spring at `http://localhost:8080`. After changing root credentials, restart Spring; Vite can stay running. Missing values display as `—`, zero counts as `0`, and provider errors have independent retry controls. Charts have candlestick and close-price views, volume bars, UTC timestamps, and an expandable provider-bar table.
+Open **http://localhost:5173**. Vite proxies relative `/api` requests to Spring at `http://localhost:8080`. After changing root credentials, restart Spring; Vite can stay running. Missing values display as `—`, zero counts as `0`, and provider errors have independent retry controls. Charts have candlestick and close-price views, volume bars, UTC timestamps, and an expandable provider-bar table. Symbol search supports Down/Up arrows, Enter selection, Escape, and focus restoration. Portfolio tables are keyboard-focusable for horizontal scrolling on small screens; mobile controls retain visible focus and touch targets.
 
 Registration/login/logout use existing session and CSRF handling. Forms include accessible dialogs, focus restoration, and a show-password control. My Orders uses server pagination, responsive rows, and backend-confirmed amendments/cancellation. Unknown mutation outcomes require checking history before resubmission; orders are never automatically retried.
 
@@ -132,12 +134,28 @@ npm run build
 
 `npm run preview` serves the built static files on port 4173 for inspection; it does not configure an API proxy. Production hosting and API routing will be added with deployment. Both development servers bind to localhost. Dependencies are locked in `frontend/package-lock.json`; generated `node_modules/` and `dist/` are ignored by Git.
 
+## Personal market tools
+
+- **Saved watchlists:** authenticated users can save up to 20 external instruments. Favorites persist in PostgreSQL and are private to that account. AAPL/TSLA remain starter cards when no favorites are saved.
+- **Price alerts:** up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate only while the Markets page polls, and cannot reconstruct missed prices between samples. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. There is no background worker, email, or push delivery.
+- **Paper portfolio:** uses $100,000 virtual starting cash and replays committed local trades by trade ID. Signed holdings, average cost, realized/unrealized P/L, cash, and equity use local execution marks, never external Alpaca prices. It is an accounting view of existing matching, with no new cash/holding enforcement: negative cash and short positions are possible. Self-trades net to zero; cancelled/resting orders do not affect the portfolio. Historical replay grows with executed history; this is not a brokerage ledger.
+- **Admin registration:** Local Exchange includes an ADMIN-only form for adding local stocks with a reference price. The existing server-side ADMIN and CSRF checks remain authoritative; registration does not create an externally listed security.
+
+Watchlists and alerts use Flyway **V8** (`exchange.watchlist`, `exchange.price_alerts`). Portfolio values are derived, so there is no separate balance table that can drift from executions.
+
 ## REST API
 
-Public GETs require no login or CSRF. All mutations require CSRF; trading requires login, and stock registration requires ADMIN. Login is form-encoded; other request bodies are JSON.
+Public GETs require no login or CSRF. Security failures distinguish `AUTHENTICATION_REQUIRED` (401), `ACCESS_DENIED` (403 permission failure), and `CSRF_INVALID` (403 missing/invalid security token). GET permission errors do not claim a CSRF problem. All mutations require CSRF; trading requires login, and stock registration requires ADMIN. Login is form-encoded; other request bodies are JSON.
 
 | Method | Path | Access / purpose |
 | --- | --- | --- |
+| GET | `/api/market/search?q=NVDA` | Public provider instrument search, max 20 results |
+| GET | `/api/market/session` | Public provider calendar/clock status |
+| GET/POST | `/api/watchlist` | Authenticated own watchlist / add `{symbol}` |
+| DELETE | `/api/watchlist/{symbol}` | Authenticated remove own favorite |
+| GET/POST | `/api/alerts` | Authenticated evaluate/list own alerts / create `{symbol,direction,target}` |
+| DELETE | `/api/alerts/{id}` | Authenticated delete own alert; unknown/other owner gives 404 |
+| GET | `/api/portfolio` | Authenticated own local paper portfolio |
 | GET | `/api/market/instruments` | Public external watchlist and connection configuration status |
 | GET | `/api/market/{symbol}/quote` | Public external Alpaca/IEX quote and source metadata |
 | GET | `/api/market/{symbol}/candles?range=1D` | Public external bars; range `1D`, `1M`, or `1Y` |
@@ -186,7 +204,7 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - A failed mutation may already have committed. On `TRADING_OUTCOME_UNCERTAIN` / `retrySafe: false`, inspect history before retrying. No request-idempotency keys yet.
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
-- No balances, portfolios, settlement, or broker order routing. External market data does not determine local sandbox fills.
+- No funded balances, settlement, or broker order routing. The paper portfolio is a derived simulation accounting view. External market data does not determine local sandbox fills.
 - Local development only for now. SSE, Docker deployment, and further production hardening remain planned.
 
 ## Detailed guides
@@ -526,7 +544,7 @@ Startup restores active LIMIT orders by `priority_sequence`, not creation time, 
 
 Original quantity remains historical after amendments, so it need not equal filled plus remaining. CANCELLED orders retain unfilled remaining quantity. Trade foreign keys enforce distinct BUY/SELL orders for the same stock. Order versions reject stale database updates. Engine fills use checked integer addition.
 
-Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
+Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
 
 This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
 

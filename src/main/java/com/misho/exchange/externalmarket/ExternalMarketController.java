@@ -18,6 +18,10 @@ public class ExternalMarketController {
         return new Configuration("Alpaca", "IEX", market.configured(), ExternalMarketService.INSTRUMENTS.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey()).map(entry -> new Instrument(entry.getKey(), entry.getValue(), "USD")).toList());
     }
+    @GetMapping("/search")
+    public List<AlpacaMarketClient.Instrument> search(@RequestParam String q) { return market.search(q); }
+    @GetMapping("/session")
+    public MarketEnvelope<AlpacaMarketClient.Session> session() { return market.session(); }
     @GetMapping("/{symbol}/quote")
     public MarketEnvelope<MarketQuote> quote(@PathVariable String symbol) { return market.quote(symbol); }
     @GetMapping("/{symbol}/candles")

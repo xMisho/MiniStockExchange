@@ -10,6 +10,7 @@ import { MarketDepth } from '../components/MarketDepth'
 import { RecentTrades } from '../components/RecentTrades'
 import { TradingWorkspace } from '../components/trading/TradingWorkspace'
 import { useAuth } from '../auth/authState'
+import { AdminStocks } from '../components/workspace/AdminStocks'
 
 export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders' | 'hidden'; onShowOrders: () => void }) {
   const [stocks, setStocks] = useState<StockMetadata[] | null>(null)
@@ -38,6 +39,7 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
       <p className="dashboard-description">Orders match Verdex’s local book, with no real money or broker routing. External Alpaca prices do not determine these fills.</p>
     </section>
     <div hidden={view !== 'local'}>
+      <AdminStocks key={auth.user?.id ?? 'anonymous'} onRegistered={() => setAttempt(value => value + 1)} />
       {error ? <div role="alert" className="page-message"><p>Couldn’t load local stocks.</p><button className="primary-button" onClick={() => setAttempt(value => value + 1)}>Retry local stocks</button></div>
         : !stocks ? <p role="status" className="panel-message">Loading local stocks…</p>
           : stocks.length === 0 ? <div className="page-message"><h2>No local stocks registered</h2><p>An administrator needs to register a stock before trading can begin.</p></div>

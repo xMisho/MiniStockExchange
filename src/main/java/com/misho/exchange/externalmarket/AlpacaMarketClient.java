@@ -31,6 +31,8 @@ public class AlpacaMarketClient {
     private final String key;
     private final String secret;
     private final Clock clock;
+    private Instant requestWindow = Instant.EPOCH;
+    private int requestCount;
 
     @Autowired
     public AlpacaMarketClient(Environment environment, ObjectMapper json) {
@@ -66,7 +68,7 @@ public class AlpacaMarketClient {
         boolean intraday = range.equals("1D");
         Instant start = intraday ? end.minus(Duration.ofDays(10))
                 : end.atZone(EXCHANGE_ZONE).minusMonths(range.equals("1M") ? 1 : 12).toInstant();
-        String interval = intraday ? "5Min" : "1Day";
+        String interval = intraday ? "1Min" : range.equals("1M") ? "1Hour" : "1Day";
         Map<String, String> parameters = new LinkedHashMap<>(Map.of("symbols", symbol, "timeframe", interval,
                 "start", start.toString(), "end", end.toString(), "sort", "desc", "limit", "1000", "adjustment", "split"));
         List<MarketBar> bars = new ArrayList<>();
@@ -85,6 +87,13 @@ public class AlpacaMarketClient {
                     bars.add(bar);
                 }
             }
+            if (intraday && !bars.isEmpty()) {
+                var latestDate = bars.get(0).startTime().atZone(EXCHANGE_ZONE).toLocalDate();
+                if (bars.stream().anyMatch(bar -> !bar.startTime().atZone(EXCHANGE_ZONE).toLocalDate().equals(latestDate))) {
+                    token = null;
+                    break;
+                }
+            }
             JsonNode next = response.path("next_page_token");
             if (next.isMissingNode() || next.isNull()) { token = null; break; }
             if (!next.isString() || next.asText().isBlank() || next.asText().length() > 2048) throw invalid();
@@ -95,17 +104,74 @@ public class AlpacaMarketClient {
             var date = bars.get(0).startTime().atZone(EXCHANGE_ZONE).toLocalDate();
             bars.removeIf(bar -> !bar.startTime().atZone(EXCHANGE_ZONE).toLocalDate().equals(date));
         }
-        if (bars.size() > 400) bars = new ArrayList<>(bars.subList(0, 400));
+        if (bars.size() > 1500) throw invalid();
         Collections.reverse(bars);
         return new MarketHistory(symbol, range, interval, 15, "split", bars);
+    }
+
+    public record Instrument(String symbol, String companyName, String currency) { }
+    public record Session(String status, Instant asOf, Instant nextOpen, Instant nextClose,
+                          Instant regularOpen, Instant regularClose, String timezone) { }
+    public List<Instrument> instruments() {
+        JsonNode data = metadata("assets", Map.of("status", "active", "asset_class", "us_equity"));
+        if (!data.isArray() || data.size() > 40000) throw invalid();
+        var result = new ArrayList<Instrument>();
+        for (JsonNode asset : data) {
+            String symbol = asset.path("symbol").asText("");
+            String name = asset.path("name").asText("");
+            if (asset.path("tradable").asBoolean(false) && symbol.matches("[A-Z][A-Z0-9.-]{0,14}") && !name.isBlank()) {
+                result.add(new Instrument(symbol, name, "USD"));
+            }
+        }
+        if (result.isEmpty()) throw invalid();
+        return List.copyOf(result);
+    }
+    public Session session() {
+        JsonNode state = metadata("clock", Map.of());
+        Instant now = time(state, "timestamp"), nextOpen = time(state, "next_open"), nextClose = time(state, "next_close");
+        if (now == null || nextOpen == null || nextClose == null || !state.path("is_open").isBoolean()) throw invalid();
+        var local = now.atZone(EXCHANGE_ZONE);
+        String date = local.toLocalDate().toString();
+        JsonNode calendar = metadata("calendar", Map.of("start", date, "end", date));
+        if (!calendar.isArray() || calendar.size() > 1) throw invalid();
+        Instant open = null, close = null;
+        String status = "CLOSED";
+        if (!calendar.isEmpty()) {
+            var day = calendar.get(0);
+            if (!date.equals(day.path("date").asText())) throw invalid();
+            try {
+                open = java.time.LocalDate.parse(day.path("date").asText()).atTime(java.time.LocalTime.parse(day.path("open").asText())).atZone(EXCHANGE_ZONE).toInstant();
+                close = java.time.LocalDate.parse(day.path("date").asText()).atTime(java.time.LocalTime.parse(day.path("close").asText())).atZone(EXCHANGE_ZONE).toInstant();
+            } catch (Exception exception) { throw invalid(); }
+            if (!open.isBefore(close)) throw invalid();
+            if (state.path("is_open").asBoolean() && !now.isBefore(open) && now.isBefore(close)) status = "REGULAR";
+            else if (!local.toLocalTime().isBefore(java.time.LocalTime.of(4, 0)) && now.isBefore(open)) status = "PRE_MARKET";
+            else if (!now.isBefore(close) && local.toLocalTime().isBefore(java.time.LocalTime.of(20, 0))) status = "AFTER_HOURS";
+        }
+        return new Session(status, now, nextOpen, nextClose, open, close, EXCHANGE_ZONE.getId());
+    }
+    private JsonNode metadata(String endpoint, Map<String, String> parameters) {
+        String query = parameters.entrySet().stream().map(entry -> entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8)).collect(java.util.stream.Collectors.joining("&"));
+        return fetch("https://paper-api.alpaca.markets/v2/" + endpoint + (query.isEmpty() ? "" : "?" + query), 25_000_000, false);
     }
 
     private JsonNode get(String endpoint, Map<String, String> parameters) {
         if (!configured()) throw new ExternalMarketException("MARKET_DATA_NOT_CONFIGURED", "External market data needs an Alpaca API key and secret on the server.");
         StringBuilder query = new StringBuilder("feed=iex&currency=USD");
         parameters.forEach((name, value) -> query.append('&').append(name).append('=').append(URLEncoder.encode(value, StandardCharsets.UTF_8)));
-        HttpRequest request = HttpRequest.newBuilder(URI.create("https://data.alpaca.markets/v2/stocks/" + endpoint + "?" + query))
-                .timeout(Duration.ofSeconds(5)).header("APCA-API-KEY-ID", key).header("APCA-API-SECRET-KEY", secret)
+        return fetch("https://data.alpaca.markets/v2/stocks/" + endpoint + "?" + query, 2_000_000, true);
+    }
+    private synchronized void permitRequest() {
+        Instant now = clock.instant();
+        if (!now.isBefore(requestWindow.plusSeconds(60))) { requestWindow = now; requestCount = 0; }
+        if (requestCount >= 150) throw new ExternalMarketException("MARKET_DATA_RATE_LIMIT", "Provider request budget reached. Please wait before refreshing.");
+        requestCount++;
+    }
+    private JsonNode fetch(String url, int maxLength, boolean requireObject) {
+        if (!configured()) throw new ExternalMarketException("MARKET_DATA_NOT_CONFIGURED", "External market data needs an Alpaca API key and secret on the server.");
+        permitRequest();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(10)).header("APCA-API-KEY-ID", key).header("APCA-API-SECRET-KEY", secret)
                 .header("Accept", "application/json").GET().build();
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
@@ -113,9 +179,9 @@ public class AlpacaMarketClient {
                     response.statusCode() == 429 ? "Alpaca rate limit reached. Market data will retry shortly."
                             : response.statusCode() == 401 || response.statusCode() == 403 ? "Alpaca credentials or feed access need checking on the server."
                             : "Alpaca market data is temporarily unavailable.");
-            if (response.body() == null || response.body().length() > 2_000_000) throw invalid();
+            if (response.body() == null || response.body().length() > maxLength) throw invalid();
             JsonNode data = json.readTree(response.body());
-            if (data == null || !data.isObject()) throw invalid();
+            if (data == null || requireObject && !data.isObject()) throw invalid();
             return data;
         } catch (ExternalMarketException exception) { throw exception; }
         catch (InterruptedException exception) { Thread.currentThread().interrupt(); throw unavailable(); }

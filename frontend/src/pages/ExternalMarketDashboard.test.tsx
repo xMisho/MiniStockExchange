@@ -3,6 +3,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ExternalMarketDashboard } from './ExternalMarketDashboard'
 import { getExternalQuote, getMarketConnection } from '../api/externalMarket'
 vi.mock('../api/externalMarket')
+vi.mock('../auth/authState', () => ({ useAuth: () => ({ user: null, status: 'anonymous', busy: false, holdSession: () => () => {} }) }))
+vi.mock('../components/workspace/MarketSession', () => ({ MarketSession: () => <div>Session status</div> }))
+vi.mock('../components/workspace/SymbolSearch', () => ({ SymbolSearch: () => <div>Stock search</div> }))
+vi.mock('../components/workspace/PriceAlerts', () => ({ PriceAlerts: () => <div>Price alerts</div> }))
 vi.mock('../components/ExternalPriceChart', () => ({ ExternalPriceChart: ({ symbol }: { symbol: string }) => <div>{symbol} provider chart</div> }))
 vi.mock('../components/trading/TradingWorkspace', () => ({ TradingWorkspace: () => <div>Local trading form</div> }))
 vi.mock('../components/MarketPanels', () => ({ MarketPanels: () => <div>Local market panels</div> }))

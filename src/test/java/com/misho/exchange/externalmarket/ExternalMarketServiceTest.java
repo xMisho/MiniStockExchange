@@ -31,9 +31,11 @@ class ExternalMarketServiceTest {
     }
     @Test void rejectsUnsupportedSymbolsAndRangesBeforeFetching() {
         var client = mock(AlpacaMarketClient.class);
+        when(client.instruments()).thenReturn(java.util.List.of());
         var service = new ExternalMarketService(client, new Time());
         assertThrows(java.util.NoSuchElementException.class, () -> service.quote("OTHER"));
         assertThrows(IllegalArgumentException.class, () -> service.history("AAPL", "ALL"));
-        verifyNoInteractions(client);
+        verify(client).instruments();
+        verify(client, never()).quote(anyString());
     }
 }

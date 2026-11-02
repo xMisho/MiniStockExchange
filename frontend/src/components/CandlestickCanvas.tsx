@@ -23,7 +23,7 @@ export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }
         handleScale: { mouseWheel: false, pinch: true },
         layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#68786d', attributionLogo: true },
         grid: { vertLines: { color: '#f0f3ec' }, horzLines: { color: '#f0f3ec' } },
-        timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#dce2db',
+        timeScale: { barSpacing: 18, rightOffset: 2, timeVisible: true, secondsVisible: false, borderColor: '#dce2db',
           tickMarkFormatter: (time: Time) => typeof time === 'number' ? new Date(time * 1000).toISOString().slice(5, 16).replace('T', ' ') : '' },
         rightPriceScale: { borderColor: '#dce2db' },
         localization: { locale: 'en-US', timeFormatter: (time: Time) => typeof time === 'number' ? formatUtcDateTime(new Date(time * 1000).toISOString()) : '' },

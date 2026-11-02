@@ -20,7 +20,7 @@ function envelope(value: unknown): value is ExternalResponse<unknown> {
 export async function getMarketConnection(signal?: AbortSignal): Promise<MarketConnection> {
   const value = await get('/api/market/instruments', signal)
   if (!isRecord(value) || value.provider !== 'Alpaca' || value.feed !== 'IEX' || typeof value.configured !== 'boolean' || !Array.isArray(value.instruments)
-    || value.instruments.length > 2 || !value.instruments.every((item): item is Instrument => isRecord(item) && ['AAPL', 'TSLA'].includes(item.symbol as string) && typeof item.companyName === 'string' && item.currency === 'USD')
+    || value.instruments.length > 2 || !value.instruments.every((item): item is Instrument => isRecord(item) && typeof item.symbol === 'string' && /^[A-Z][A-Z0-9.-]{0,14}$/.test(item.symbol) && typeof item.companyName === 'string' && item.currency === 'USD')
     || new Set(value.instruments.map(item => item.symbol)).size !== value.instruments.length) throw new Error('Invalid external watchlist response.')
   return { provider: 'Alpaca', feed: 'IEX', configured: value.configured, instruments: value.instruments }
 }
@@ -45,8 +45,8 @@ export async function getExternalHistory(key: string, signal?: AbortSignal): Pro
   const value = await get(`/api/market/${encodeURIComponent(symbol)}/candles?range=${encodeURIComponent(range)}`, signal)
   if (!envelope(value) || !isRecord(value.data)) throw new Error('Invalid external chart response.')
   const history = value.data
-  if (history.symbol !== symbol || history.range !== range || !['1D', '1M', '1Y'].includes(range) || history.interval !== (range === '1D' ? '5Min' : '1Day')
-    || history.delayMinutes !== 15 || history.adjustment !== 'split' || !Array.isArray(history.candles) || history.candles.length > 400 || !history.candles.every(bar)
+  if (history.symbol !== symbol || history.range !== range || !['1D', '1M', '1Y'].includes(range) || history.interval !== (range === '1D' ? '1Min' : range === '1M' ? '1Hour' : '1Day')
+    || history.delayMinutes !== 15 || history.adjustment !== 'split' || !Array.isArray(history.candles) || history.candles.length > 1500 || !history.candles.every(bar)
     || !history.candles.every((item, index, all) => index === 0 || Date.parse(all[index - 1].startTime) < Date.parse(item.startTime))) throw new Error('Invalid external chart response.')
   return value as ExternalResponse<ExternalHistory>
 }

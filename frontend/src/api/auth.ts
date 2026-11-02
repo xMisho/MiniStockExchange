@@ -25,7 +25,7 @@ async function request(path: string, init: RequestInit = {}, protectedRequest = 
     if (response.status === 401 && protectedRequest) expiredListeners.forEach((listener) => listener())
     let code: string | undefined
     let retrySafe: boolean | undefined
-    let message = response.status === 403 ? 'Access denied or security token expired. Please try again.' : `Request failed (${response.status}).`
+    let message = response.status === 403 ? 'You do not have permission to perform this action.' : `Request failed (${response.status}).`
     try { const body: unknown = await response.json(); if (isRecord(body)) { if (typeof body.error === 'string') message = body.error; if (typeof body.code === 'string') code = body.code; if (typeof body.retrySafe === 'boolean') retrySafe = body.retrySafe } } catch {}
     throw new AuthError(message, response.status, mutationSent, code, retrySafe)
   }

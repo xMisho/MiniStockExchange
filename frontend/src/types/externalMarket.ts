@@ -8,5 +8,5 @@ export interface ExternalQuote {
 }
 export type HistoryRange = '1D' | '1M' | '1Y'
 export interface ExternalBar { startTime: string; open: number; high: number; low: number; close: number; volume: number; tradeCount: number | null }
-export interface ExternalHistory { symbol: string; range: HistoryRange; interval: '5Min' | '1Day'; delayMinutes: number; adjustment: 'split'; candles: ExternalBar[] }
+export interface ExternalHistory { symbol: string; range: HistoryRange; interval: '1Min' | '1Hour' | '1Day'; delayMinutes: number; adjustment: 'split'; candles: ExternalBar[] }
 export interface ExternalResponse<T> { provider: 'Alpaca'; feed: 'IEX'; currency: 'USD'; coverage: string; fetchedAt: string; stale: boolean; warning: string | null; data: T }

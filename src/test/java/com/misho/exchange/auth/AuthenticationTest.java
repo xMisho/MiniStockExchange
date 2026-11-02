@@ -311,6 +311,23 @@ class AuthenticationTest {
         assertEquals(null, browser.cookie("VERDEX_REMEMBER_ME"));
     }
 
+    @Test
+    void accessResponsesDistinguishLoginPermissionAndCsrfFailures() throws Exception {
+        var anonymous = client();
+        var required = json.readTree(anonymous.get("/api/auth/me").body());
+        assertEquals("AUTHENTICATION_REQUIRED", required.get("code").asText());
+        var browser = client();
+        assertEquals(200, browser.login(account(false), PASSWORD).statusCode());
+        var denied = browser.postJson("/api/stocks", stockBody());
+        assertEquals(403, denied.statusCode());
+        assertEquals("ACCESS_DENIED", json.readTree(denied.body()).get("code").asText());
+        assertFalse(json.readTree(denied.body()).get("error").asText().contains("CSRF"));
+        var csrf = browser.postWithToken("/api/stocks", stockBody(), "application/json", null);
+        assertEquals(403, csrf.statusCode());
+        assertEquals("CSRF_INVALID", json.readTree(csrf.body()).get("code").asText());
+        assertTrue(json.readTree(csrf.body()).get("error").asText().contains("Security token"));
+    }
+
     private HttpResponse<String> replayRememberedCookie(String cookie) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me"))
                 .header("Cookie", "VERDEX_REMEMBER_ME=" + cookie).GET().build(), HttpResponse.BodyHandlers.ofString());

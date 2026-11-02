@@ -21,9 +21,10 @@ public class SecurityConfiguration {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/stocks", "/api/stocks/*",
-                                "/api/auth/csrf", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
+                                "/api/auth/csrf", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
+                        .requestMatchers("/api/watchlist", "/api/watchlist/*", "/api/alerts", "/api/alerts/*", "/api/portfolio").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/stocks/*/orders").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/orders/*").authenticated()
@@ -33,12 +34,15 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint((request, response, exception) -> {
                             response.setStatus(401);
                             response.setContentType("application/json");
-                            response.getWriter().write("{\"error\":\"Authentication required.\"}");
+                            response.getWriter().write("{\"error\":\"Authentication required.\",\"code\":\"AUTHENTICATION_REQUIRED\"}");
                         })
                         .accessDeniedHandler((request, response, exception) -> {
                             response.setStatus(403);
                             response.setContentType("application/json");
-                            response.getWriter().write("{\"error\":\"Access denied or invalid CSRF token.\"}");
+                            boolean csrf = exception instanceof org.springframework.security.web.csrf.CsrfException;
+                            response.getWriter().write(json.writeValueAsString(java.util.Map.of(
+                                    "error", csrf ? "Security token missing or invalid. Refresh the page and try again." : "You do not have permission to perform this action.",
+                                    "code", csrf ? "CSRF_INVALID" : "ACCESS_DENIED")));
                         }))
                 .formLogin(form -> form
                         .loginPage("/api/auth/login")

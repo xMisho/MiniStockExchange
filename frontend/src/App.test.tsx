@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { VerdexWorkspace } from './App'
+vi.mock('./auth/authState', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('./components/AccountMenu', () => ({ AccountMenu: () => <div>Account controls</div> }))
 vi.mock('./pages/ExternalMarketDashboard', () => ({ ExternalMarketDashboard: () => <h1>External markets</h1> }))
 vi.mock('./pages/LocalExchange', () => ({ LocalExchange: ({ view }: { view: string }) => <div data-testid="local-view">{view}</div> }))
