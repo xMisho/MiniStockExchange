@@ -50,6 +50,16 @@ Keep credentials out of the JDBC URL, Git, screenshots, frontend environment var
 
 Flyway creates the schema/tables on the first successful startup; Hibernate validates them. Your Mac's users, admin role, stocks, trades and watchlists are not automatically copied to Neon. This deployment starts with a fresh database.
 
+### Linked Neon CLI setup
+
+The root `neon.ts` declares Postgres only; existing Spring Security authentication and Flyway migrations remain authoritative. The Neon plugin includes agent skills and an OAuth MCP server; a second MCP installation for the same agent is unnecessary.
+
+`neon deploy` reconciles the linked database services, not the Render website. It pulls `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, and `NEON_BRANCH` into the ignored local dotenv file. Keep the existing local `DB_*` settings so ordinary development and tests continue using local PostgreSQL.
+
+For Render, privately map the direct `DATABASE_URL_UNPOOLED` into the three `DB_*` values shown above, using the actual database name (for example `verdex`). Use the existing PostgreSQL JDBC driver and small Hikari pool; the direct connection also supports startup Flyway migrations. Never expose database URLs in React or `VITE_*` variables. A private ignored `.env.neon` can hold these deployment values separately; do not commit it or load it for integration tests.
+
+From the repository root, `npm run build` builds React and packages the combined Spring Boot JAR. It skips database tests during packaging; run the normal test suite separately against the dedicated local test database.
+
 ## 2. Create Render Free hosting after code review and approval
 
 Use https://dashboard.render.com/ and connect GitHub. Once the reviewed deployment branch is merged/pushed:

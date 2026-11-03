@@ -12,3 +12,5 @@ target/
 frontend/node_modules/
 frontend/dist/
 frontend/*.log
+.neon
+node_modules/
