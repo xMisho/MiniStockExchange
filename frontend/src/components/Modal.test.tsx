@@ -32,3 +32,10 @@ it('prevents Escape or closing while the request is pending', () => {
   fireEvent.click(button)
   expect(close).not.toHaveBeenCalled()
 })
+
+it('renders outside a table cell so numeric alignment cannot leak into the dialog', () => {
+  render(<table><tbody><tr><td style={{ textAlign: 'right' }}><Modal title="Amend order" onClose={() => {}}><label>New price<input /></label></Modal></td></tr></tbody></table>)
+  const dialog = screen.getByRole('dialog', { name: 'Amend order' })
+  expect(dialog.parentElement).toBe(document.body)
+  expect(dialog.closest('td')).toBeNull()
+})

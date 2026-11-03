@@ -25,7 +25,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
                         .requestMatchers("/api/watchlist", "/api/watchlist/*", "/api/alerts", "/api/alerts/*", "/api/portfolio").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*", "/api/orders/*/lifecycle", "/api/stocks/*/order-preview").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/stocks/*/orders").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/orders/*").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/orders/*").authenticated()

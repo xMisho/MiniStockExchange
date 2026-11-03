@@ -134,10 +134,29 @@ npm run build
 
 `npm run preview` serves the built static files on port 4173 for inspection; it does not configure an API proxy. Production hosting and API routing will be added with deployment. Both development servers bind to localhost. Dependencies are locked in `frontend/package-lock.json`; generated `node_modules/` and `dist/` are ignored by Git.
 
+## Trading workspace
+
+The local ticket includes a **Trade stock** selector synchronized with the local chart, quotes and book; it lists all registered local stocks. Administrators can add symbols using **Admin · Register local stock**. It shows **Local simulated exchange** bid/ask, paper cash and signed holdings. These balances are informational, not reserved buying power: short positions and negative cash remain possible. External market · IEX prices never determine local fills.
+
+- Limit orders show an estimated quantity × limit value. Clicking a local bid/ask copies its exact price into the limit field without submitting or changing BUY/SELL.
+- Market tickets preview all opposite-side local price levels, including levels beyond the five displayed. Estimates include fillable quantity, unfilled remainder, notional, average/worst price and observation time. They refresh while the ticket is active; prices/liquidity can change before submission. The unfilled market remainder is cancelled.
+- **Order activity** expands on demand in My Orders: submission, individual executions, recorded amendments and cancellation. The endpoint returns the latest 100 events, newest first; remaining/filled totals always come from the order. Detailed actions start with migration V9; previous amendments cannot be reconstructed.
+- A manual first-trade guide explains a resting sell and matching buy. No demo orders are created automatically. Same-account self-trades net to zero in the paper portfolio.
+- Mobile layout prioritizes chart → ticket → book → orders. Price/quantity changes use restrained flashes, respect reduced motion, and preserve cached values through refresh failures.
+
+New authenticated read endpoints:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/stocks/{symbol}/order-preview?side=BUY&quantity=5` | Read-only full-book market-fill estimate; no reservation or execution |
+| GET | `/api/orders/{id}/lifecycle` | Owner/admin activity; does not expose counterparty order/user IDs |
+
+Order actions are inserted in the same PostgreSQL transaction as order changes and fills. Rollback removes the audit action too; post-commit recovery never replays it. Failed requests are not recorded as successful actions. No push transport or automated retry was added.
+
 ## Personal market tools
 
 - **Saved watchlists:** authenticated users can save up to 20 external instruments. Favorites persist in PostgreSQL and are private to that account. AAPL/TSLA remain starter cards when no favorites are saved.
-- **Price alerts:** up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate only while the Markets page polls, and cannot reconstruct missed prices between samples. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. There is no background worker, email, or push delivery.
+- **Price alerts:** choose the alert stock independently of the chart using the Alert stock dropdown (Apple/Tesla and watchlist entries) or Find alert stock provider search. Up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate only while the Markets page polls, and cannot reconstruct missed prices between samples. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. There is no background worker, email, or push delivery.
 - **Paper portfolio:** uses $100,000 virtual starting cash and replays committed local trades by trade ID. Signed holdings, average cost, realized/unrealized P/L, cash, and equity use local execution marks, never external Alpaca prices. It is an accounting view of existing matching, with no new cash/holding enforcement: negative cash and short positions are possible. Self-trades net to zero; cancelled/resting orders do not affect the portfolio. Historical replay grows with executed history; this is not a brokerage ledger.
 - **Admin registration:** Local Exchange includes an ADMIN-only form for adding local stocks with a reference price. The existing server-side ADMIN and CSRF checks remain authoritative; registration does not create an externally listed security.
 
@@ -544,7 +563,7 @@ Startup restores active LIMIT orders by `priority_sequence`, not creation time, 
 
 Original quantity remains historical after amendments, so it need not equal filled plus remaining. CANCELLED orders retain unfilled remaining quantity. Trade foreign keys enforce distinct BUY/SELL orders for the same stock. Order versions reject stale database updates. Engine fills use checked integer addition.
 
-Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
+Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts, **V9** order action history. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
 
 This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
 

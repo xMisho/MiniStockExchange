@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Props { title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode }
 export function Modal({ title, description, busy = false, onClose, children }: Props) {
@@ -22,11 +23,11 @@ export function Modal({ title, description, busy = false, onClose, children }: P
       if (opener?.isConnected) opener.focus()
     }
   }, [])
-  return <dialog ref={dialog} className="modal" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+  return createPortal(<dialog ref={dialog} className="modal" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
     onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
     <div className="modal-heading"><div><p className="eyebrow">VERDEX</p><h2 id={titleId}>{title}</h2></div>
       <button type="button" className="text-button" disabled={busy} onClick={onClose} aria-label="Close dialog">Close</button></div>
     {description && <p className="modal-description" id={descriptionId}>{description}</p>}
     {children}
-  </dialog>
+  </dialog>, document.body)
 }

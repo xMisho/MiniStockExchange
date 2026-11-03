@@ -107,7 +107,7 @@ public class TradingService {
             market.orders().put(row.getId(), row);
             market.engine().submitOrder(Order.restore(new OrderSnapshot(row.getId(), side, type,
                     validatedPrice, quantity, quantity, 0, OrderStatus.OPEN, row.getCreatedAt().toEpochMilli())));
-            return new Change(row, row.getPrioritySequence(), true);
+            return new Change(row, row.getPrioritySequence(), true, "SUBMITTED", quantity);
         }).order();
     }
 
@@ -119,7 +119,7 @@ public class TradingService {
             market.orders().put(orderId, row);
             authorize(actor(actorId), row);
             boolean cancelled = market.engine().cancelOrder(orderId);
-            return new Change(row, row.getPrioritySequence(), cancelled);
+            return new Change(row, row.getPrioritySequence(), cancelled, "CANCELLED", row.getRemainingQuantity());
         }).changed();
     }
 
@@ -131,15 +131,57 @@ public class TradingService {
             market.orders().put(orderId, row);
             authorize(actor(actorId), row);
             if (row.getStatus() == OrderStatus.FILLED || row.getStatus() == OrderStatus.CANCELLED) {
-                return new Change(row, row.getPrioritySequence(), false);
+                return new Change(row, row.getPrioritySequence(), false, "AMENDED", remaining);
             }
             BigDecimal price = PersistenceValues.price(newPrice);
             if (remaining <= 0) { throw new IllegalArgumentException("Remaining quantity must be positive."); }
             boolean losesPriority = row.getLimitPrice().compareTo(price) != 0 || remaining > row.getRemainingQuantity();
             long priority = losesPriority ? orders.nextPrioritySequence() : row.getPrioritySequence();
             boolean amended = market.engine().amendOrder(orderId, price, remaining);
-            return new Change(row, priority, amended);
+            return new Change(row, priority, amended, "AMENDED", remaining);
         }).changed();
+    }
+
+    public record FillPreview(int requestedQuantity, int filledQuantity, int unfilledQuantity,
+                              BigDecimal estimatedValue, BigDecimal averagePrice, BigDecimal worstPrice,
+                              Instant observedAt) { }
+
+    public synchronized FillPreview preview(String symbol, OrderSide side, int quantity) {
+        if (side == null || quantity <= 0) { throw new IllegalArgumentException("Valid side and quantity required."); }
+        var snapshot = getMarketSnapshot(symbol);
+        var levels = side == OrderSide.BUY ? snapshot.sellDepth() : snapshot.buyDepth();
+        int left = quantity;
+        BigDecimal value = BigDecimal.ZERO;
+        BigDecimal worst = null;
+        for (var level : levels.entrySet()) {
+            int fill = (int) Math.min((long) left, level.getValue());
+            value = value.add(level.getKey().multiply(BigDecimal.valueOf(fill)));
+            left -= fill;
+            worst = level.getKey();
+            if (left == 0) { break; }
+        }
+        int filled = quantity - left;
+        return new FillPreview(quantity, filled, left, value,
+                filled == 0 ? null : value.divide(BigDecimal.valueOf(filled), 4, java.math.RoundingMode.HALF_UP),
+                worst, Instant.now());
+    }
+
+    public synchronized List<java.util.Map<String, Object>> lifecycle(Long actorId, long id) {
+        return transaction(() -> {
+            var row = orders.findById(id).orElseThrow(OrderNotFoundException::new);
+            authorize(actor(actorId), row);
+            return jdbc.queryForList("""
+                    SELECT * FROM (
+                        SELECT id, kind, occurred_at, price, requested_quantity AS quantity,
+                               previous_price, previous_remaining, remaining_quantity, filled_quantity, 0 AS source
+                        FROM exchange.order_actions WHERE order_id = ?
+                        UNION ALL
+                        SELECT id, 'FILL', executed_at, execution_price, quantity,
+                               NULL, NULL, NULL, NULL, 1
+                        FROM exchange.trades WHERE buy_order_id = ? OR sell_order_id = ?
+                    ) events ORDER BY occurred_at DESC, source DESC, id DESC LIMIT 100
+                    """, id, id, id);
+        });
     }
 
     public synchronized PersistedOrder getOrder(Long actorId, long orderId) {
@@ -240,6 +282,8 @@ public class TradingService {
     }
 
     private void persist(LoadedMarket market, Change change) {
+        BigDecimal previousPrice = change.row().getLimitPrice();
+        int previousRemaining = change.row().getRemainingQuantity();
         var newTrades = market.engine().getTradesSince(market.previousTradeCount());
         var affectedIds = new LinkedHashSet<Long>();
         affectedIds.add(change.row().getId());
@@ -269,6 +313,16 @@ public class TradingService {
                         market.orders().get(trade.getSellOrderId()), trade.getExecutionPrice(),
                         trade.getQuantity(), Instant.ofEpochMilli(trade.getTimestamp()))).toList();
         trades.saveAllAndFlush(executions);
+        if (change.changed()) {
+            var row = change.row();
+            jdbc.update("""
+                    INSERT INTO exchange.order_actions
+                    (order_id, kind, previous_price, price, previous_remaining, requested_quantity,
+                     remaining_quantity, filled_quantity)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, row.getId(), change.kind(), previousPrice, row.getLimitPrice(), previousRemaining,
+                    change.requested(), row.getRemainingQuantity(), row.getFilledQuantity());
+        }
     }
 
     private MatchingEngine market(String symbol) {
@@ -328,7 +382,7 @@ public class TradingService {
         return symbol.strip().toUpperCase(Locale.ROOT);
     }
 
-    private record Change(OrderEntity row, long priority, boolean changed) { }
+    private record Change(OrderEntity row, long priority, boolean changed, String kind, int requested) { }
     private record Result(PersistedOrder order, boolean changed) { }
     private record Pending(MatchingEngine engine, Result result) { }
 }

@@ -39,6 +39,19 @@ public class TradingController {
         return ResponseEntity.created(URI.create("/api/orders/" + order.id())).body(OrderResponse.from(order));
     }
 
+    @GetMapping("/stocks/{symbol}/order-preview")
+    public TradingService.FillPreview preview(Principal principal, @PathVariable String symbol,
+                                              @RequestParam com.misho.exchange.OrderSide side,
+                                              @RequestParam int quantity) {
+        actor(principal);
+        return trading.preview(symbol, side, quantity);
+    }
+
+    @GetMapping("/orders/{id}/lifecycle")
+    public java.util.List<java.util.Map<String, Object>> lifecycle(Principal principal, @PathVariable long id) {
+        return trading.lifecycle(actor(principal), id);
+    }
+
     @GetMapping("/orders/me")
     public OrderHistoryResponse mine(Principal principal,
                                      @RequestParam(defaultValue = "0") int page,

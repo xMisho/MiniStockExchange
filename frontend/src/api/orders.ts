@@ -71,3 +71,20 @@ export async function amendOrder(id: number, newPrice: string, newRemainingQuant
   await mutate(`/api/orders/${id}`, 'PATCH', body)
 }
 export async function cancelOrder(id: number) { await mutate(`/api/orders/${id}`, 'DELETE') }
+
+export interface FillPreview { requestedQuantity: number; filledQuantity: number; unfilledQuantity: number; estimatedValue: number; averagePrice: number | null; worstPrice: number | null; observedAt: string }
+export async function getOrderPreview(symbol: string, side: string, quantity: number, signal: AbortSignal): Promise<FillPreview> {
+  const response = await authenticatedRequest(`/api/stocks/${encodeURIComponent(symbol)}/order-preview?side=${side}&quantity=${quantity}`, signal)
+  const v: unknown = await response.json()
+  if (!isRecord(v) || v.requestedQuantity !== quantity || !counter(v.filledQuantity) || !counter(v.unfilledQuantity)
+    || v.filledQuantity + v.unfilledQuantity !== quantity || !isFiniteNumber(v.estimatedValue)
+    || v.estimatedValue < 0 || !(v.averagePrice === null || isFiniteNumber(v.averagePrice)) || !(v.worstPrice === null || isFiniteNumber(v.worstPrice)) || !instant(v.observedAt)) throw new Error('Invalid fill estimate.')
+  return v as unknown as FillPreview
+}
+export interface OrderEvent { id: number; kind: string; occurred_at: string; price: number | null; quantity: number; previous_price: number | null; previous_remaining: number | null; remaining_quantity: number | null; filled_quantity: number | null }
+export async function getOrderEvents(id: number, signal: AbortSignal): Promise<OrderEvent[]> {
+  const response = await authenticatedRequest(`/api/orders/${id}/lifecycle`, signal)
+  const v: unknown = await response.json()
+  if (!Array.isArray(v) || v.length > 100 || !v.every(e => isRecord(e) && counter(e.id) && ['SUBMITTED', 'AMENDED', 'CANCELLED', 'FILL'].includes(e.kind as string) && instant(e.occurred_at) && counter(e.quantity) && (e.price === null || isFiniteNumber(e.price)) && (e.previous_price === null || isFiniteNumber(e.previous_price)) && ['previous_remaining', 'remaining_quantity', 'filled_quantity'].every(k => e[k] === null || counter(e[k])))) throw new Error('Invalid order activity response.')
+  return v as OrderEvent[]
+}

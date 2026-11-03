@@ -10,6 +10,8 @@ import { MarketDepth } from '../components/MarketDepth'
 import { RecentTrades } from '../components/RecentTrades'
 import { TradingWorkspace } from '../components/trading/TradingWorkspace'
 import { useAuth } from '../auth/authState'
+import { FirstTradeGuide } from '../components/trading/FirstTradeGuide'
+import { RefreshStatus } from '../components/RefreshStatus'
 import { AdminStocks } from '../components/workspace/AdminStocks'
 
 export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders' | 'hidden'; onShowOrders: () => void }) {
@@ -50,8 +52,10 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
               <div><span className="metric-label">VOLUME / TRADES</span><strong>{snapshot ? `${formatCount(snapshot.volume)} / ${formatCount(snapshot.tradeCount)}` : '—'}</strong></div>
               {(summary.refreshError || summary.resource.status === 'error') && <p role="status" className="source-warning">Local quotes could not refresh. <button className="text-button" onClick={summary.retry}>Retry local quotes</button></p>}
             </section>}
+      {symbol && <FirstTradeGuide symbol={symbol} />}
+      {symbol && <RefreshStatus updatedAt={summary.updatedAt} refreshError={summary.refreshError} refreshing={summary.refreshing} onRetry={summary.retry} />}
       {!auth.user && selected && <div className="guest-local-panels">{chart}{book}</div>}
     </div>
-    <TradingWorkspace symbol={selected?.symbol ?? null} view={view} chart={chart} book={book} onShowOrders={onShowOrders} />
+    <TradingWorkspace stocks={stocks ?? []} onSymbolChange={setSymbol} symbol={selected?.symbol ?? null} view={view} chart={chart} book={book} onShowOrders={onShowOrders} />
   </>
 }

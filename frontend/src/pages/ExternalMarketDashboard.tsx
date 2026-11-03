@@ -66,7 +66,7 @@ export function ExternalMarketDashboard() {
       {(watchError || watch.errorMessage) && <p role="alert">{watchError ?? watch.errorMessage}</p>}
       {!connection.configured ? <section className="page-message provider-setup" id="market-charts"><p className="eyebrow">MARKET DATA CONNECTION REQUIRED</p><h2>Connect Alpaca to load real prices</h2><p>Configure <code>ALPACA_API_KEY</code> and <code>ALPACA_API_SECRET</code> in the server’s private <code>.env</code>, then restart Spring Boot. Keep these credentials out of frontend files.</p><p><a href="https://app.alpaca.markets/signup" target="_blank" rel="noreferrer">Create an Alpaca account ↗</a> · <a href="https://docs.alpaca.markets/us/docs/market-data-faq" target="_blank" rel="noreferrer">Feed and credentials guide ↗</a></p><p className="panel-footnote">IEX covers one exchange. Quote timestamps show the latest reported trade; historical charts intentionally exclude the newest 15 minutes. Public redistribution needs suitable provider permissions.</p></section>
         : instrument && <div className="market-workspace external-workspace" id="market-charts"><ExternalMarketSummary instrument={instrument} response={response} loading={quote.resource.status === 'loading'} error={quote.errorMessage} retry={quote.retry} /><ExternalPriceChart key={symbol} symbol={symbol} /></div>}
-      {connection.configured && instrument && <PriceAlerts key={`${auth.user?.id ?? 'anonymous'}:${symbol}`} symbol={symbol} />}
+      {connection.configured && instrument && <PriceAlerts key={auth.user?.id ?? 'anonymous'} symbol={symbol} instruments={[...connection.instruments, ...saved, instrument]} />}
     </>}
 
   </>

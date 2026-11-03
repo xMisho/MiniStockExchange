@@ -6,6 +6,6 @@ export function RefreshStatus({ updatedAt, refreshError, refreshing, onRetry }: 
   if (updatedAt === null) return null
   return <div className="refresh-status">
     <span>Last updated {formatUtcTime(new Date(updatedAt).toISOString())}{refreshing ? ' · Refreshing…' : ''}</span>
-    {refreshError && <span role="status">Refresh failed; showing previous data. <button type="button" onClick={onRetry}>Retry refresh</button></span>}
+    {refreshError && <span role="status">Stale · Connection unavailable; showing previous data. <button type="button" onClick={onRetry}>Retry refresh</button></span>}
   </div>
 }

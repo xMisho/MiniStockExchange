@@ -74,6 +74,49 @@ class TradingApiTest {
     }
 
     @Test
+    void previewUsesFullBookWithoutMutationAndLifecycleIsPrivateAndDurable() throws Exception {
+        stock();
+        var owner = user(false);
+        var other = user(false);
+        var admin = user(true);
+        long sell = submit(owner, "SELL", "100", 2);
+        for (int i = 1; i <= 6; i++) { submit(owner, "SELL", String.valueOf(100 + i), 1); }
+        var preview = owner.get("/api/stocks/" + symbol + "/order-preview?side=BUY&quantity=10");
+        assertEquals(200, preview.statusCode(), preview.body());
+        var estimate = json.readTree(preview.body());
+        assertEquals(8, estimate.get("filledQuantity").asInt());
+        assertEquals(2, estimate.get("unfilledQuantity").asInt());
+        assertEquals(821, estimate.get("estimatedValue").asInt());
+        assertEquals(106, estimate.get("worstPrice").asInt());
+        assertEquals(0, trading.getTradeHistory(symbol).size());
+        assertEquals(400, owner.get("/api/stocks/" + symbol + "/order-preview?side=BUY&quantity=0").statusCode());
+        assertEquals(401, new ApiTestClient(port, json).get("/api/stocks/" + symbol + "/order-preview?side=BUY&quantity=1").statusCode());
+        long buy = submit(other, "BUY", "100", 1);
+        String path = "/api/orders/" + sell;
+        assertEquals(204, owner.changeJson("PATCH", path, "{\"newPrice\":99,\"newRemainingQuantity\":3}", true).statusCode());
+        assertEquals(204, owner.changeJson("DELETE", path, "", true).statusCode());
+        var history = owner.get(path + "/lifecycle");
+        assertEquals(200, history.statusCode(), history.body());
+        var events = json.readTree(history.body());
+        assertEquals(4, events.size(), history.body());
+        assertEquals("CANCELLED", events.get(0).get("kind").asText());
+        assertEquals("AMENDED", events.get(1).get("kind").asText());
+        assertEquals(3, events.get(1).get("quantity").asInt());
+        assertEquals(1, events.get(1).get("previous_remaining").asInt());
+        assertEquals("FILL", events.get(2).get("kind").asText());
+        assertDoesNotThrow(() -> java.time.Instant.parse(events.get(2).get("occurred_at").asText()));
+        assertEquals(403, other.get(path + "/lifecycle").statusCode());
+        assertEquals(200, admin.get(path + "/lifecycle").statusCode());
+        assertEquals(401, new ApiTestClient(port, json).get(path + "/lifecycle").statusCode());
+        assertFalse(history.body().contains("user_id"));
+        assertFalse(history.body().contains("buy_order_id"));
+        trading.restoreOnStartup();
+        assertEquals(4, json.readTree(owner.get(path + "/lifecycle").body()).size());
+        var sellPreview = owner.get("/api/stocks/" + symbol + "/order-preview?side=SELL&quantity=1");
+        assertEquals(0, json.readTree(sellPreview.body()).get("filledQuantity").asInt());
+    }
+
+    @Test
     void authenticatedOrdersMatchPersistAndExposeOnlySafeFields() throws Exception {
         stock();
         var buyer = user(false);

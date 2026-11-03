@@ -376,9 +376,12 @@ class TradingServiceTest {
     @Test
     void failureImmediatelyBeforeCommitRollsBackAlreadyFlushedChanges() {
         PersistedOrder sell = limit(OrderSide.SELL, "100", 5);
+        int actions = jdbc.queryForObject("SELECT count(*) FROM exchange.order_actions WHERE order_id = ?", Integer.class, sell.id());
         injectTransactionFailure(false);
         assertThrows(TradingOperationException.class, () -> limit(OrderSide.BUY, "100", 2));
         assertRollbackBaseline(sell);
+        assertEquals(actions, jdbc.queryForObject("SELECT count(*) FROM exchange.order_actions WHERE order_id = ?", Integer.class, sell.id()));
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM exchange.order_actions a JOIN exchange.orders o ON a.order_id = o.id WHERE o.stock_symbol = ?", Integer.class, symbol()));
     }
 
     @Test

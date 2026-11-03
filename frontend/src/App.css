@@ -53,7 +53,7 @@ dt span { font-size: 10px; font-weight: 400; letter-spacing: 0; }
 .page-message { padding: 36px; margin-bottom: 32px; }
 .primary-button { display: inline-flex; gap: 12px; align-items: center; justify-content: center; background: var(--forest); color: white; border: 1px solid var(--forest); border-radius: 7px; padding: 11px 17px; min-height: 44px; margin-top: 12px; cursor: pointer; font-size: 13px; font-weight: 550; }
 .primary-button:hover:not(:disabled) { background: #163b2c; }
-.text-button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; background: white; border: 1px solid #c1d0bf; border-radius: 6px; padding: 8px 12px; color: var(--forest); cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; }
+.text-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: white; border: 1px solid #c1d0bf; border-radius: 6px; padding: 8px 12px; color: var(--forest); cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; }
 .text-button:hover:not(:disabled) { background: #f1f6ef; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 .lower-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
@@ -76,15 +76,15 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .table-scroll { overflow-x: auto; max-width: 100%; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .refresh-status { display: grid; gap: 4px; min-height: 20px; margin-top: 16px; color: var(--muted); font-size: 11px; line-height: 1.7; }
-.refresh-status button { border: 0; padding: 4px; background: transparent; color: var(--forest); text-decoration: underline; cursor: pointer; font: inherit; }
+.refresh-status button { min-height: 44px; border: 0; padding: 4px; background: transparent; color: var(--forest); text-decoration: underline; cursor: pointer; font: inherit; }
 .account-area { font-size: 13px; max-width: 440px; min-width: 0; }
 .account-actions { display: flex; align-items: center; gap: 18px; }
 .account-actions > span { overflow-wrap: anywhere; min-width: 0; }
-.account-actions > button, .account-notice > button { background: transparent; color: var(--forest); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font: inherit; padding: 10px; min-height: 44px; flex-shrink: 0; }
+.account-actions > button, .account-notice > button { min-height: 44px; background: transparent; color: var(--forest); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font: inherit; padding: 10px; min-height: 44px; flex-shrink: 0; }
 .account-actions > button:hover:not(:disabled) { background: #eaf1e6; }
 .account-role { font-size: 10px; padding: 4px 7px; margin-left: 5px; background: #eaf1e6; border-radius: 5px; color: #47624d; }
 .account-notice { font-size: 13px; line-height: 1.7; color: #805139; }
-.modal { width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 28px; margin: auto; border: 1px solid var(--border); border-radius: 16px; background: white; color: var(--ink); overflow-y: auto; box-shadow: 0 20px 80px #193d2930; }
+.modal { width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 28px; margin: auto; border: 1px solid var(--border); border-radius: 16px; background: white; color: var(--ink); text-align: left; direction: ltr; overflow-y: auto; box-shadow: 0 20px 80px #193d2930; }
 .modal::backdrop { background: #142d2480; }
 .modal-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .modal-heading h2 { font-size: 24px; }
@@ -95,7 +95,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .account-form input, .trading-form input, .trading-form select, .amend-form input, .order-history-tools select { width: 100%; min-width: 0; background: white; color: var(--ink); border: 1px solid #adbfae; border-radius: 6px; padding: 11px; font: inherit; font-size: 14px; min-height: 44px; }
 input[aria-invalid="true"] { border-color: #a34545; background: #fff9f7; }
 .trading-form input:disabled { background: #f1f4ef; color: var(--muted); }
-.trading-workspace { display: grid; gap: 24px; margin-bottom: 44px; }
+.trading-workspace { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 24px; margin-bottom: 44px; }
 .trading-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .trading-form fieldset, .amend-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .trading-error { color: #a34545; font-size: 13px; line-height: 1.7; }
@@ -119,7 +119,7 @@ input[aria-invalid="true"] { border-color: #a34545; background: #fff9f7; }
 .order-identity time { display: block; color: var(--muted); font-size: 10px; margin-top: 7px; }
 .cell-secondary { display: block; color: var(--muted); font-size: 10px; margin-top: 7px; }
 .order-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 135px; white-space: normal; }
-.order-actions .text-button { min-height: 36px; padding: 6px 10px; font-size: 11px; }
+.order-actions .text-button { min-height: 44px; padding: 6px 10px; font-size: 11px; }
 .cancel-button { color: #93533b; }
 .order-terminal { color: var(--muted); font-size: 11px; }
 .order-status { display: inline-block; padding: 5px 8px; border-radius: 5px; background: #f0f3ec; font-size: 10px; color: #52634f; }
@@ -196,7 +196,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .watch-stale { flex-basis: 100%; color: #8a602c; font-size: 11px; }
 .price-value { padding: 2px 3px; margin-left: -3px; border-radius: 4px; }
 .chart-switch { display: inline-flex; max-width: 100%; gap: 4px; padding: 4px; margin: 0 0 20px; background: #edf2e9; border-radius: 8px; }
-.chart-switch button { border: 0; border-radius: 5px; background: transparent; color: var(--muted); padding: 9px 14px; min-height: 40px; cursor: pointer; font-size: 12px; }
+.chart-switch button { border: 0; border-radius: 5px; background: transparent; color: var(--muted); padding: 9px 14px; min-height: 44px; cursor: pointer; font-size: 12px; }
 .chart-switch button[aria-pressed="true"] { background: white; color: var(--forest); box-shadow: 0 1px 4px #193d2912; font-weight: 600; }
 .volume-chart { border-top: 1px solid var(--divider); margin-top: 18px; padding-top: 16px; }
 .volume-heading { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
@@ -209,7 +209,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .password-field { display: grid; gap: 8px; }
 .password-control { position: relative; }
 .account-form .password-control input { padding-right: 52px; }
-.password-toggle { display: grid; place-items: center; position: absolute; right: 1px; top: 1px; bottom: 1px; width: 44px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.password-toggle { display: grid; place-items: center; position: absolute; right: 1px; top: 0; bottom: 0; width: 44px; min-height: 44px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
 .password-toggle:hover:not(:disabled) { background: #edf4ec; color: var(--forest); }
 .password-toggle svg { width: 20px; height: 20px; }
 .trading-form.side-buy label:first-child select { color: #28734e; border-color: #8ab69c; background: #f3f9f4; font-weight: 600; }
@@ -250,7 +250,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .terminal-ticket .trading-fields { grid-template-columns: 1fr 1fr; gap: 14px; }
 .terminal-ticket .form-actions { align-items: stretch; flex-direction: column; }
 .terminal-ticket .data-heading { align-items: start; flex-direction: column; gap: 10px; }
-.workspace-orders { position: relative; }
+.workspace-orders { position: relative; min-width: 0; }
 .orders-view-link { display: inline-block; margin: 0 0 12px; }
 .action-toast { position: fixed; z-index: 80; right: 24px; bottom: 24px; max-width: min(440px, calc(100vw - 32px)); margin: 0; box-shadow: 0 8px 30px #173e2920; display: flex; gap: 12px; align-items: center; }
 .action-toast p { margin: 0; }
@@ -306,3 +306,60 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .primary-nav a { display: inline-flex; align-items: center; min-height: 44px; }
 .admin-stocks summary { min-height: 44px; padding-block: 10px; }
 .watch-actions button { min-height: 44px; }
+
+.ticket-context, .order-estimate { background: #f2f6f1; border-radius: 10px; padding: 14px; margin-block: 12px; font-variant-numeric: tabular-nums; }
+.ticket-context p, .order-estimate p { margin-block: 6px; }
+.ticket-context small, .order-estimate small { color: #526459; line-height: 1.5; }
+.book-price { min-height: 44px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.book-price:hover { background: #edf4ed; }
+.first-trade-guide { margin-block: 16px; }
+.first-trade-guide summary, .order-lifecycle summary { min-height: 44px; cursor: pointer; padding-block: 12px; font-weight: 600; }
+.first-trade-guide li { padding-block: 7px; line-height: 1.6; }
+.order-lifecycle { text-align: left; white-space: normal; min-width: 140px; }
+.order-lifecycle > div { max-width: 340px; min-width: 220px; overflow-wrap: anywhere; }
+.order-lifecycle ol { padding-left: 20px; }
+.order-lifecycle li { margin-block: 14px; line-height: 1.5; }
+.market-table, .local-ticker, .order-preview, .order-estimate { font-variant-numeric: tabular-nums; }
+:where(button, a, input, select, summary):focus-visible { outline: 3px solid #268267; outline-offset: 3px; }
+@media (max-width: 760px) {
+  .local-terminal-grid { display: flex; flex-direction: column; align-items: stretch; }
+  .terminal-chart { order: 0; }
+  .terminal-ticket { order: 1; }
+  .terminal-book { order: 2; }
+  .terminal-ticket .data-heading { flex-wrap: wrap; gap: 8px; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions .primary-button { width: 100%; min-height: 48px; }
+  .order-lifecycle > div { min-width: 0; max-width: 100%; }
+  .first-trade-guide ol { padding-left: 20px; }
+  .ticket-context { overflow-wrap: anywhere; }
+}
+
+.order-activity-row > td { text-align: left; padding: 18px; background: #f7f9f5; white-space: normal; }
+.order-activity-row .order-lifecycle > div { max-width: none; min-width: 0; }
+.order-activity-row .activity-content ol { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.order-activity-row .activity-content li { margin: 0 16px 6px 0; }
+@media (max-width: 1100px) {
+  .order-activity-row { grid-column: 1 / -1; display: block; border: 1px solid var(--border); border-radius: 10px; padding: 16px; background: #f7f9f5; }
+  .order-activity-row > td { display: block; padding: 0; }
+  .order-activity-row > td::before { display: none; }
+}
+
+.modal .modal-heading > div { min-width: 0; }
+.modal .modal-heading h2 { overflow-wrap: anywhere; }
+.modal :is(label, input, select, .modal-description, .panel-footnote, .trading-error) { text-align: left; }
+.modal .modal-heading > button { flex-shrink: 0; margin-top: 0; }
+.modal .form-actions { align-items: center; gap: 12px; }
+.modal .form-actions > button { margin-top: 0; min-height: 44px; }
+.order-actions-cell > .text-button { margin-top: 8px; }
+.text-button, .chart-switch button, .chart-controls button { min-height: 44px; }
+.ticket-stock-picker { margin-bottom: 20px; min-width: 0; }
+.ticket-stock-picker select { max-width: 100%; }
+.ticket-stock-picker .panel-footnote { margin-top: 8px; }
+@media (max-width: 480px) {
+  .modal .form-actions { display: flex; flex-direction: column-reverse; align-items: stretch; }
+  .modal .form-actions > button { width: 100%; justify-content: center; text-align: center; }
+  .modal .modal-heading h2 { font-size: 21px; }
+}
+
+.primary-button, .text-button, .chart-switch button { text-align: center; }
+.order-actions { align-items: center; }
