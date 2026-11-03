@@ -1,12 +1,16 @@
 # Verdex · MiniStockExchange
 
-**Verdex** (Verde + index) is the web interface for this project. The Java packages, Maven artifact, and repository retain the MiniStockExchange name.
+**Verdex** is the web interface for this project. The Java packages, Maven artifact, and repository retain the MiniStockExchange name.
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
 **Current state:** React dashboard with searchable external stock quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Symbol search, saved watchlists, in-app alerts, a local paper portfolio, admin stock registration, and a market-session indicator are implemented. Live push updates and deployment are next.
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
+
+## Hosting preparation
+
+Verdex now has a Docker build and a Render Free + Neon Free deployment configuration. The built React frontend can be served by Spring Boot from the same origin. This is **prepared, not yet deployed**; the production writer-handoff implementation still requires review before public trading. See [deployment setup and remaining launch checks](docs/DEPLOYMENT.md).
 
 ## Project evolution
 
@@ -304,7 +308,7 @@ curl http://localhost:8080/api/health
 curl http://localhost:8080/api/stocks
 ```
 
-The health response is `{"status":"UP"}`. It checks web responsiveness, not continuous database health. Startup requires PostgreSQL, valid migrations, and successful market recovery. There is no page at `/` yet. Stop Spring with **Ctrl+C**; PostgreSQL continues running separately.
+The health response is `{"status":"UP"}`. It checks web responsiveness, not continuous database health. Startup requires PostgreSQL, valid migrations, and successful market recovery. The default development backend does not serve the frontend at `/`; use Vite, or build the combined application with the Maven `production` profile as described in [deployment setup](docs/DEPLOYMENT.md). Stop Spring with **Ctrl+C**; PostgreSQL continues running separately.
 
 Build and run the packaged backend:
 
@@ -559,13 +563,15 @@ Startup restores active LIMIT orders by `priority_sequence`, not creation time, 
 | `exchange.users` | ID, normalized username/email, password hash, registration time, role |
 | `exchange.orders` | Owner, symbol, side/type, price, original/remaining/filled quantities, status, priority, timestamps, version |
 | `exchange.trades` | Symbol, buy/sell order references, execution price/quantity/time |
+| `exchange.order_actions` | Durable submission, amendment and cancellation activity |
+| `exchange.market_writer` | Production deployment ownership for one active matching writer |
 | Priority sequence | Queue order across submissions and priority-losing amendments |
 
 Original quantity remains historical after amendments, so it need not equal filled plus remaining. CANCELLED orders retain unfilled remaining quantity. Trade foreign keys enforce distinct BUY/SELL orders for the same stock. Order versions reject stale database updates. Engine fills use checked integer addition.
 
-Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts, **V9** order action history. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
+Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts, **V9** order action history, **V10** production writer ownership. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
 
-This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
+This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. The production profile additionally checks database writer ownership under that same transaction lock: a replacement atomically restores state and claims ownership, and superseded instances reject trading/cached-book reads. This is a fail-closed deployment handoff, not horizontal scaling; see [recovery procedures](docs/DEPLOYMENT.md#recovery-procedure). All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
 
 </details>
 

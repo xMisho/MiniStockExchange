@@ -17,7 +17,7 @@ public class RememberedLoginService extends PersistentTokenBasedRememberMeServic
         setCookieName("VERDEX_REMEMBER_ME");
         setParameter("remember-me");
         setTokenValiditySeconds(14 * 24 * 60 * 60);
-        setUseSecureCookie(environment.getProperty("SESSION_COOKIE_SECURE", Boolean.class, false));
+        setUseSecureCookie(environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, false));
         setCookieCustomizer(cookie -> { cookie.setHttpOnly(true); cookie.setAttribute("SameSite", "Lax"); });
     }
     @Override

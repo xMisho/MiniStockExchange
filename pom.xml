@@ -65,4 +65,25 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>production</id>
+            <build>
+                <resources>
+                    <resource>
+                        <directory>src/main/resources</directory>
+                    </resource>
+                    <resource>
+                        <directory>frontend/dist</directory>
+                        <targetPath>static</targetPath>
+                    </resource>
+                    <resource>
+                        <directory>frontend</directory>
+                        <targetPath>static</targetPath>
+                        <includes><include>THIRD_PARTY_NOTICES.md</include></includes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -54,15 +54,17 @@ public class TradingService {
     private final MarketRegistry registry;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
+    private final MarketWriter writer;
 
     public TradingService(StockRepository stocks, UserRepository users, OrderRepository orders,
                           TradeRepository trades, MarketLoader loader, MarketRegistry registry,
-                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager, CandleRepository candles) {
+                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager, CandleRepository candles, MarketWriter writer) {
         this.stocks = stocks;
         this.users = users;
         this.orders = orders;
         this.trades = trades;
         this.candles = candles;
+        this.writer = writer;
         this.loader = loader;
         this.registry = registry;
         this.jdbc = jdbc;
@@ -80,7 +82,7 @@ public class TradingService {
                     result.put(stock.getSymbol(), loader.load(stock.getSymbol()).engine());
                 }
                 return result;
-            });
+            }, true);
             registry.replaceAll(restored);
         } catch (RuntimeException | Error exception) {
             registry.markAllUnavailable();
@@ -204,11 +206,11 @@ public class TradingService {
     }
 
     public synchronized MarketSnapshot getMarketSnapshot(String symbol) {
-        return market(symbol(symbol)).getMarketSnapshot();
+        return readEngine(symbol(symbol), MatchingEngine::getMarketSnapshot);
     }
 
     public synchronized List<Trade> getTradeHistory(String symbol) {
-        return market(symbol(symbol)).getTradeHistory();
+        return readEngine(symbol(symbol), MatchingEngine::getTradeHistory);
     }
 
     public synchronized Page<TradeResponse> getTradeHistory(String symbol, int page, int size) {
@@ -238,7 +240,7 @@ public class TradingService {
     }
 
     public synchronized NavigableMap<Long, OhlcCandle> getOhlcCandles(String symbol) {
-        return market(symbol(symbol)).getOhlcCandles();
+        return readEngine(symbol(symbol), MatchingEngine::getOhlcCandles);
     }
 
     public synchronized void recoverMarket(String symbol) {
@@ -360,11 +362,22 @@ public class TradingService {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
     }
 
+    private <T> T readEngine(String symbol, Function<MatchingEngine, T> read) {
+        MatchingEngine engine = market(symbol);
+        return writer.enabled() ? transaction(() -> read.apply(engine)) : read.apply(engine);
+    }
+
     private <T> T transaction(Supplier<T> operation) {
+        return transaction(operation, false);
+    }
+
+    private <T> T transaction(Supplier<T> operation, boolean startup) {
         requireNoOuterTransaction();
         return transactions.execute(status -> {
             jdbc.execute("SET LOCAL lock_timeout = '5s'");
             jdbc.execute("SELECT pg_advisory_xact_lock(8243061201)");
+            if (startup) { writer.claim(); }
+            else { writer.requireOwner(); }
             return operation.get();
         });
     }

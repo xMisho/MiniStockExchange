@@ -1,0 +1,15 @@
+**
+!Dockerfile
+!pom.xml
+!src/
+!src/**
+!frontend/
+!frontend/**
+**/.env
+**/.env.*
+**/.git
+**/node_modules
+**/dist
+**/target
+**/*.log
+**/.DS_Store

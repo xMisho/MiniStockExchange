@@ -20,7 +20,7 @@ public class SecurityConfiguration {
             throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/health", "/api/stocks", "/api/stocks/*",
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/assets/**", "/THIRD_PARTY_NOTICES.md", "/api/ready", "/api/health", "/api/stocks", "/api/stocks/*",
                                 "/api/auth/csrf", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
