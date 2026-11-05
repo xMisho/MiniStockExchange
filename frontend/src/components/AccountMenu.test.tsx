@@ -21,7 +21,7 @@ afterEach(cleanup)
 function show() { return render(<AuthProvider><AccountMenu /></AuthProvider>) }
 async function openLogin() { fireEvent.click(await screen.findByRole('button', { name: 'Sign in' })) }
 function fillLogin() {
-  fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'example' } })
+  fireEvent.change(screen.queryByLabelText('Username or email') ?? screen.getByLabelText('Username'), { target: { value: 'example' } })
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExamplePassword123!' } })
 }
 it('restores username and role from the existing session', async () => {
@@ -49,7 +49,7 @@ it('registers then asks for login without signing the user in', async () => {
   fillLogin()
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'example@example.test' } })
   fireEvent.click(screen.getByRole('button', { name: 'Register account' }))
-  expect(await screen.findByText('Account created. Sign in with your username.')).toBeTruthy()
+  expect(await screen.findByText('Account created. Sign in with your username or email.')).toBeTruthy()
   expect(api.login).not.toHaveBeenCalled()
   expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('')
 })
@@ -176,4 +176,34 @@ it('offers an unchecked remembered-login choice and forwards the user selection'
   fireEvent.click(checkbox)
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to account' }))
   await waitFor(() => expect(api.login).toHaveBeenCalledWith('example', 'ExamplePassword123!', true))
+})
+
+it('requests recovery without exposing whether the email has an account', async () => {
+  vi.mocked(api.forgotPassword).mockResolvedValue(undefined)
+  show(); await openLogin()
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  expect(screen.queryByLabelText('Username')).toBeNull()
+  expect(screen.queryByLabelText('Password')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'example@example.test' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
+  expect(await screen.findByText(/If an account matches that address/)).toBeTruthy()
+  expect(api.forgotPassword).toHaveBeenCalledWith('example@example.test')
+  expect(api.login).not.toHaveBeenCalled()
+})
+it('shows unavailable email delivery honestly instead of promising a sent email', async () => {
+  vi.mocked(api.forgotPassword).mockRejectedValue(new Error('Email delivery is not configured yet.'))
+  show(); await openLogin(); fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'example@example.test' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Email delivery is not configured yet.')
+})
+
+
+it('accepts an email address in the shared sign-in field', async () => {
+  show(); await openLogin()
+  fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'example@example.test' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExamplePassword123!' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in to account' }))
+  await waitFor(() => expect(api.login).toHaveBeenCalledWith('example@example.test', 'ExamplePassword123!', false))
+  expect(await screen.findByText('example')).toBeTruthy()
 })

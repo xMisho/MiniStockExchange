@@ -35,6 +35,11 @@ public class UserEntity {
     @Column(name = "role", length = 10, nullable = false)
     private UserRole role = UserRole.USER;
 
+    @Column(name = "auth_version", nullable = false)
+    private long authVersion;
+
+    public long getAuthVersion() { return authVersion; }
+
     protected UserEntity() { }
 
     UserEntity(RegisterUserRequest request, String passwordHash) {

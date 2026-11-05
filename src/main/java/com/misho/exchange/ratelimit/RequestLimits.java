@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 /** Bounded, process-local token buckets. No credentials or request bodies are retained. */
 @Component
 public class RequestLimits {
-    public enum Policy { LOGIN(10, 60), REGISTRATION(5, 3600), TRADING(60, 60), EXTERNAL(180, 60), READS(600, 60);
+    public enum Policy { LOGIN(10, 60), RECOVERY(5, 3600), REGISTRATION(5, 3600), TRADING(60, 60), EXTERNAL(180, 60), READS(600, 60);
         final int capacity;
         final int seconds;
         Policy(int capacity, int seconds) { this.capacity = capacity; this.seconds = seconds; }

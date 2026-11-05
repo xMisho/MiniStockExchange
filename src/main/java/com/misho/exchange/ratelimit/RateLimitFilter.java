@@ -26,6 +26,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         String identity = request.getRemoteAddr(); // Never parse caller-supplied forwarding headers here.
         if (loginPhase) {
             if (method.equals("POST") && path.equals("/api/auth/login")) policy = RequestLimits.Policy.LOGIN;
+            if (method.equals("POST") && java.util.Set.of("/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email", "/api/auth/email-verification").contains(path)) policy = RequestLimits.Policy.RECOVERY;
             if (method.equals("POST") && path.equals("/api/users")) policy = RequestLimits.Policy.REGISTRATION;
         } else {
             var auth = SecurityContextHolder.getContext().getAuthentication();

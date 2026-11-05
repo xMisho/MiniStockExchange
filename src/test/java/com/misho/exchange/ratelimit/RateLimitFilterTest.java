@@ -14,7 +14,7 @@ class RateLimitFilterTest {
     private final RequestLimits limits = new RequestLimits(new MockEnvironment()
             .withProperty("verdex.rate-limit.login", "1").withProperty("verdex.rate-limit.registration", "1")
             .withProperty("verdex.rate-limit.trading", "1").withProperty("verdex.rate-limit.external", "1")
-            .withProperty("verdex.rate-limit.reads", "1"), () -> 0);
+            .withProperty("verdex.rate-limit.reads", "1").withProperty("verdex.rate-limit.recovery", "1"), () -> 0);
     private MockHttpServletResponse send(String method, String path, boolean early, String forwarded) throws Exception {
         var request = new MockHttpServletRequest(method, path); request.setServletPath(path);
         request.setRemoteAddr("192.0.2.1"); request.addHeader("X-Forwarded-For", forwarded);
@@ -42,6 +42,11 @@ class RateLimitFilterTest {
         assertEquals(429, send("DELETE", "/api/orders/1", false, "").getStatus());
         SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated("bob", "", java.util.List.of()));
         assertEquals(200, send("POST", "/api/stocks/TSLA/orders", false, "").getStatus());
+    }
+    @Test void recoveryEndpointsShareAnIpBudget() throws Exception {
+        assertEquals(200,send("POST","/api/auth/forgot-password",true,"").getStatus());
+        for(String path:new String[]{"/api/auth/reset-password","/api/auth/verify-email","/api/auth/email-verification"})
+            assertEquals(429,send("POST",path,true,"").getStatus());
     }
     @Test void healthAndStaticAssetsStayAvailable() throws Exception {
         for (int i = 0; i < 10; i++) for (String path : new String[]{"/api/ready", "/api/health", "/assets/app.js"})

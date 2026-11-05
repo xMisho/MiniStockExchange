@@ -21,8 +21,9 @@ public class WorkspaceService {
     private final JdbcTemplate jdbc;
     private final ExternalMarketService market;
     private final TransactionTemplate tx;
-    public WorkspaceService(JdbcTemplate jdbc, ExternalMarketService market, PlatformTransactionManager manager) {
-        this.jdbc = jdbc; this.market = market; this.tx = new TransactionTemplate(manager);
+    private final com.misho.exchange.email.EmailOutbox email;
+    public WorkspaceService(JdbcTemplate jdbc, ExternalMarketService market, PlatformTransactionManager manager, com.misho.exchange.email.EmailOutbox email) {
+        this.email=email; this.jdbc = jdbc; this.market = market; this.tx = new TransactionTemplate(manager);
     }
     private void lock(long user) { jdbc.queryForObject("SELECT id FROM exchange.users WHERE id = ? FOR UPDATE", Long.class, user); }
     public List<AlpacaMarketClient.Instrument> watchlist(long user) {
@@ -78,6 +79,11 @@ public class WorkspaceService {
                         if (crossed) committedHits.add(row.getLong(1));
                         jdbc.update("UPDATE exchange.price_alerts SET previous_price=?, last_observed_at=?, triggered_at=?, triggered_price=? WHERE id=? AND user_id=?",
                                 price, Timestamp.from(quote.priceAsOf()), crossed ? Timestamp.from(quote.priceAsOf()) : null, crossed ? price : null, row.getLong(1), user);
+                        if (crossed) {
+                            var recipients=jdbc.queryForList("SELECT email FROM exchange.users WHERE id=? AND email_verified AND alert_emails",String.class,user);
+                            if (!recipients.isEmpty()) email.enqueue(user,recipients.get(0),"ALERT","alert:"+row.getLong(1),"Verdex price alert: "+symbol,
+                                    symbol+" crossed "+row.getString(2).toLowerCase(java.util.Locale.ROOT)+" $"+target+" at $"+price+" on "+quote.priceAsOf()+".\nExternal market · Alpaca IEX · USD. This is an observed crossing, not a guaranteed execution price.\nManage or disable email alerts in Verdex.",Instant.now().plusSeconds(21600));
+                        }
                     }, user, symbol);
                     return List.copyOf(committedHits);
                 });

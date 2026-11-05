@@ -16,14 +16,15 @@ import tools.jackson.databind.ObjectMapper;
 public class SecurityConfiguration {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, ObjectMapper json, RememberedLoginService rememberedLogin, com.misho.exchange.ratelimit.RequestLimits limits, com.misho.exchange.observability.TradingMetrics metrics)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, org.springframework.jdbc.core.JdbcTemplate jdbc, ObjectMapper json, RememberedLoginService rememberedLogin, com.misho.exchange.ratelimit.RequestLimits limits, com.misho.exchange.observability.TradingMetrics metrics)
             throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/assets/**", "/THIRD_PARTY_NOTICES.md", "/api/ready", "/api/live", "/api/health", "/api/events", "/api/stocks", "/api/stocks/*",
                                 "/api/auth/csrf", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks", "/api/admin/paper-allocations").hasRole("ADMIN")
+                        .requestMatchers("/api/auth/email-preferences", "/api/auth/email-verification").authenticated()
                         .requestMatchers("/api/watchlist", "/api/watchlist/*", "/api/alerts", "/api/alerts/*", "/api/portfolio").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*", "/api/orders/*/lifecycle", "/api/stocks/*/order-preview", "/api/stocks/*/balance").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/stocks/*/orders").authenticated()
@@ -69,6 +70,7 @@ public class SecurityConfiguration {
                         .logoutSuccessHandler((request, response, authentication) -> response.setStatus(204)))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable);
+        http.addFilterBefore(new CredentialVersionFilter(jdbc), org.springframework.security.web.access.intercept.AuthorizationFilter.class);
         http.addFilterBefore(new com.misho.exchange.ratelimit.RateLimitFilter(limits, true, metrics),
                 org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         http.addFilterAfter(new com.misho.exchange.ratelimit.RateLimitFilter(limits, false, metrics),

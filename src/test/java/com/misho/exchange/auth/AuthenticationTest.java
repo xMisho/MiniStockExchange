@@ -47,6 +47,7 @@ class AuthenticationTest {
     private com.misho.exchange.user.DatabaseUserDetailsService details;
     @Autowired
     private RememberMeTokenRepository rememberedTokens;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
     @LocalServerPort
     private int port;
@@ -119,6 +120,14 @@ class AuthenticationTest {
     }
 
     @Test
+    void unconfiguredEmailDoesNotPretendToSendRecovery() throws Exception {
+        var browser=client();
+        var response=browser.postJson("/api/auth/forgot-password", "{\"email\":\"nobody@example.test\"}");
+        assertEquals(503,response.statusCode());
+        assertTrue(response.body().contains("Email delivery is not configured"));
+    }
+
+    @Test
     void validLoginPersistsSessionAndReturnsOnlySafeProfile() throws Exception {
         String username = account(false);
         ApiTestClient browser = client();
@@ -139,6 +148,32 @@ class AuthenticationTest {
         assertTrue(cookie.contains("httponly"));
         assertTrue(cookie.contains("samesite=lax"));
         assertEquals(401, client().get("/api/auth/me").statusCode());
+    }
+
+    @Test
+    void emailLoginNormalizesInputAndKeepsCanonicalUsernameAndRememberedSession() throws Exception {
+        String username=account(true);
+        var browser=client();
+        var login=browser.login("  "+username.toUpperCase(Locale.ROOT)+"@EXAMPLE.TEST  ",PASSWORD,true);
+        assertEquals(200,login.statusCode());
+        assertEquals(username,json.readTree(login.body()).get("username").asText());
+        assertEquals("ADMIN",json.readTree(login.body()).get("role").asText());
+        assertEquals(username,jdbc.queryForObject("SELECT username FROM exchange.persistent_logins WHERE username=?",String.class,username));
+        assertEquals(200,browser.get("/api/auth/me").statusCode());
+        browser.forgetSessionCookie();
+        assertEquals(username,json.readTree(browser.get("/api/auth/me").body()).get("username").asText());
+        assertEquals(204,browser.logout().statusCode());
+        assertEquals(200,client().login(username,PASSWORD).statusCode());
+    }
+
+    @Test
+    void unknownEmailAndWrongPasswordUseTheSameFailureResponse() throws Exception {
+        String username=account(false);
+        var browser=client();
+        var wrong=browser.login(username+"@example.test","WrongPassword123!");
+        var missing=browser.login("missing_"+username+"@example.test",PASSWORD);
+        assertEquals(401,wrong.statusCode());assertEquals(401,missing.statusCode());assertEquals(wrong.body(),missing.body());
+        assertEquals(401,browser.get("/api/auth/me").statusCode());
     }
 
     @Test
@@ -300,7 +335,7 @@ class AuthenticationTest {
         String username = account(false);
         var browser = client();
         assertEquals(200, browser.login(username, PASSWORD, true).statusCode());
-        var freshService = new RememberedLoginService(details, rememberedTokens, new org.springframework.mock.env.MockEnvironment());
+        var freshService = new RememberedLoginService(details, rememberedTokens, new org.springframework.mock.env.MockEnvironment(), jdbc, transactions);
         var request = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/auth/me");
         request.setServletPath("/api/auth/me");
         request.setCookies(new jakarta.servlet.http.Cookie("VERDEX_REMEMBER_ME", browser.cookie("VERDEX_REMEMBER_ME")));

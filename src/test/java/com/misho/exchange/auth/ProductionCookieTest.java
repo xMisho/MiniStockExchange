@@ -16,7 +16,8 @@ class ProductionCookieTest {
         for (boolean secure : List.of(true, false)) {
             var service = new RememberedLoginService(mock(DatabaseUserDetailsService.class),
                     mock(RememberMeTokenRepository.class), new MockEnvironment()
-                    .withProperty("server.servlet.session.cookie.secure", Boolean.toString(secure)));
+                    .withProperty("server.servlet.session.cookie.secure", Boolean.toString(secure)),
+                    mock(org.springframework.jdbc.core.JdbcTemplate.class), mock(org.springframework.transaction.PlatformTransactionManager.class));
             var request = new MockHttpServletRequest("POST", "/api/auth/login");
             request.setParameter("remember-me", "true");
             var response = new MockHttpServletResponse();

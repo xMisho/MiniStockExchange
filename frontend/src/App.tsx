@@ -5,6 +5,7 @@ import { ExternalMarketDashboard } from './pages/ExternalMarketDashboard'
 import { LocalExchange } from './pages/LocalExchange'
 import { PaperPortfolio } from './components/workspace/PaperPortfolio'
 import { useAuth } from './auth/authState'
+import { RecoveryLink } from './components/RecoveryLink'
 import './App.css'
 
 type View = 'markets' | 'exchange' | 'orders' | 'portfolio'
@@ -22,7 +23,7 @@ export function VerdexWorkspace() {
     <header className="site-header app-header">
       <a className="brand" href="#/markets" aria-label="Verdex home"><span className="brand-mark" aria-hidden="true">V<span>↗</span></span><span>Verdex</span></a>
       <nav className="primary-nav" aria-label="Primary navigation">{([['markets', 'Markets'], ['exchange', 'Local Exchange'], ['orders', 'My Orders'], ['portfolio', 'Portfolio']] as const).map(([key, label]) => <a key={key} href={`#/${key}`} aria-current={view === key ? 'page' : undefined}>{label}</a>)}</nav>
-      <AccountMenu />
+      <AccountMenu /><RecoveryLink />
     </header>
     <div id="trading-feedback" />
     <main id="main-content" tabIndex={-1}>

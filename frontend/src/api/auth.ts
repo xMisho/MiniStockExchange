@@ -59,3 +59,23 @@ export async function register(username: string, email: string, password: string
 export async function logout() { await csrfRequest('/api/auth/logout', { method: 'POST' }) }
 
 export function authenticatedRequest(path: string, signal?: AbortSignal) { return request(path, { signal }, true) }
+
+export async function forgotPassword(email: string) {
+  await csrfRequest('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }, false)
+}
+export async function resetPassword(token: string, password: string) {
+  await csrfRequest('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }) }, false)
+}
+export async function verifyEmail(token: string) {
+  await csrfRequest('/api/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }, false)
+}
+export interface EmailPreferences { configured: boolean; verified: boolean; alertEmails: boolean }
+export async function getEmailPreferences(signal?: AbortSignal): Promise<EmailPreferences> {
+  const value: unknown = await (await authenticatedRequest('/api/auth/email-preferences', signal)).json()
+  if (!isRecord(value) || typeof value.configured !== 'boolean' || typeof value.verified !== 'boolean' || typeof value.alertEmails !== 'boolean') throw new Error('Invalid email preferences response.')
+  return { configured: value.configured, verified: value.verified, alertEmails: value.alertEmails }
+}
+export async function requestEmailVerification() { await csrfRequest('/api/auth/email-verification', { method: 'POST' }) }
+export async function setAlertEmails(alertEmails: boolean) {
+  await csrfRequest('/api/auth/email-preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alertEmails }) })
+}
