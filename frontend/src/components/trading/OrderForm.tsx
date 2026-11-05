@@ -9,11 +9,11 @@ import type { StockMetadata } from '../../types/market'
 import type { FillPreview } from '../../api/orders'
 import type { OrderSide, OrderType, SubmitOrder } from '../../types/orders'
 
-interface Props { symbol: string; disabled: boolean; submitting?: boolean; active?: boolean; stocks?: StockMetadata[]; onSymbolChange?: (symbol: string) => void; onSubmit: (symbol: string, order: SubmitOrder) => Promise<boolean> }
-export function OrderForm({ symbol, disabled, submitting = false, active = true, stocks, onSymbolChange, onSubmit }: Props) {
-  const [side, setSide] = useState<OrderSide>('BUY')
+interface Props { initialSellQuantity?: number; symbol: string; disabled: boolean; submitting?: boolean; active?: boolean; stocks?: StockMetadata[]; onSymbolChange?: (symbol: string) => void; onSubmit: (symbol: string, order: SubmitOrder) => Promise<boolean> }
+export function OrderForm({ symbol, initialSellQuantity, disabled, submitting = false, active = true, stocks, onSymbolChange, onSubmit }: Props) {
+  const [side, setSide] = useState<OrderSide>(initialSellQuantity ? 'SELL' : 'BUY')
   const [type, setType] = useState<OrderType>('LIMIT')
-  const [quantity, setQuantity] = useState('')
+  const [quantity, setQuantity] = useState(initialSellQuantity ? String(initialSellQuantity) : '')
   const [price, setPrice] = useState('')
   const [error, setError] = useState<{ field: 'quantity' | 'price'; message: string } | null>(null)
   const [estimate, setEstimate] = useState<{ key: string; value?: FillPreview; error?: string } | null>(null)
@@ -77,6 +77,7 @@ export function OrderForm({ symbol, disabled, submitting = false, active = true,
     <div className="ticket-context"><strong>Local simulated exchange · {symbol}</strong><p>Local bid {formatOrderPrice(snapshot?.bestBidPrice ?? null)} · Ask {formatOrderPrice(snapshot?.bestAskPrice ?? null)}</p>
       <p>Available paper cash {portfolio ? `$${formatPrice(portfolio.availableCash)}` : '—'} · Available holdings {portfolio ? formatCount(portfolio.availableShares) : '—'} shares</p>
       <small>Open limit orders reserve cash or shares. Short selling and borrowing are disabled. {account.refreshError || quote.refreshError ? 'Previous data: refresh unavailable.' : ''}</small></div>
+    {initialSellQuantity && <p className="panel-footnote" role="status">SELL ticket prepared from your holdings. Check available shares, choose a price or MARKET, then submit when ready. Nothing has been submitted.</p>}
     <form className={`trading-form side-${side.toLowerCase()}`} onSubmit={(event) => { void submit(event) }}>
       <fieldset disabled={disabled}>
         <legend className="sr-only">Order details for {symbol}</legend>

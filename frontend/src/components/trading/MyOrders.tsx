@@ -27,6 +27,7 @@ export function MyOrders({ page, status, revision, disabled, pending, feedback, 
   const data = current?.status === 'ready' ? current.data : null
   return <section className="data-panel my-orders" aria-busy={!current} aria-labelledby="my-orders-title" id="my-orders">
     <div className="data-heading"><div><p className="eyebrow">YOUR ACTIVITY</p><h2 id="my-orders-title" tabIndex={-1}>My Orders</h2></div><button type="button" className="text-button" onClick={onRefresh}>Refresh My Orders</button></div>
+    <p className="panel-footnote">OPEN means waiting for a match. Amend changes only the outstanding part of an order; filled shares cannot be amended. To sell shares you own, use Portfolio → Sell shares to create a new SELL order.</p>
     <div className="order-history-tools"><label>Order status<select value={status} onChange={(event) => onStatus(event.target.value as OrderStatus | '')}>
       <option value="">All statuses</option>{orderStatuses.map((value) => <option value={value} key={value}>{value.replace('_', ' ')}</option>)}
     </select></label><span>Your orders only · Newest ID first · Times in UTC</span></div>

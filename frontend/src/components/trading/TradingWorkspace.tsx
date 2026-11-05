@@ -1,3 +1,4 @@
+import type { SellIntent } from '../../utils/tradeIntent'
 import { useEffect, useRef, useState } from 'react'
 import type { StockMetadata } from '../../types/market'
 import type { ReactNode } from 'react'
@@ -11,6 +12,7 @@ import { MyOrders } from './MyOrders'
 
 type Notice = { kind: 'success' | 'error' | 'uncertain'; message: string }
 interface WorkspaceProps {
+  sellIntent?: SellIntent | null
   symbol: string | null
   stocks?: StockMetadata[]
   onSymbolChange?: (symbol: string) => void
@@ -19,13 +21,13 @@ interface WorkspaceProps {
   book?: ReactNode
   onShowOrders?: () => void
 }
-export function TradingWorkspace({ symbol, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders }: WorkspaceProps) {
+export function TradingWorkspace({ symbol, sellIntent, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders }: WorkspaceProps) {
   const auth = useAuth()
   if (auth.status === 'loading') return <section hidden={view === 'hidden'} className="data-panel" id="trading"><p className="panel-message">Checking your session before enabling trading…</p></section>
   if (!auth.user) return <section hidden={view === 'hidden'} className="data-panel" id="trading"><h2 id="my-orders">Trade in your exchange</h2><p className="panel-message">Sign in using the header to place orders and manage My Orders. Public market data remains available.</p></section>
-  return <AuthenticatedTrading key={auth.user.id} symbol={symbol} stocks={stocks} onSymbolChange={onSymbolChange} view={view} chart={chart} book={book} onShowOrders={onShowOrders} accountId={auth.user.id} authBusy={auth.busy} holdSession={auth.holdSession} />
+  return <AuthenticatedTrading key={auth.user.id} symbol={symbol} sellIntent={sellIntent} stocks={stocks} onSymbolChange={onSymbolChange} view={view} chart={chart} book={book} onShowOrders={onShowOrders} accountId={auth.user.id} authBusy={auth.busy} holdSession={auth.holdSession} />
 }
-function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders, authBusy, holdSession, accountId }: WorkspaceProps & { accountId: number; authBusy: boolean; holdSession: () => () => void }) {
+function AuthenticatedTrading({ symbol, sellIntent, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders, authBusy, holdSession, accountId }: WorkspaceProps & { accountId: number; authBusy: boolean; holdSession: () => () => void }) {
   const [busy, setBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const noticeElement = useRef<HTMLDivElement>(null)
@@ -121,7 +123,7 @@ function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', 
     {busy && <p role="status" className="panel-footnote">Waiting for the server to confirm your order action…</p>}
     <div hidden={view !== 'local'} className={chart ? 'local-terminal-grid' : undefined}>
       {chart && <div className="terminal-chart">{chart}</div>}
-      <div className="terminal-ticket">{symbol ? <OrderForm key={symbol} symbol={symbol} stocks={stocks} onSymbolChange={onSymbolChange} active={view === 'local'} disabled={disabled} submitting={submitting} onSubmit={submit} /> : <p className="panel-message">Select a registered stock to place an order.</p>}</div>
+      <div className="terminal-ticket">{symbol ? <OrderForm key={`${symbol}:${sellIntent?.symbol === symbol ? sellIntent.nonce : "default"}`} initialSellQuantity={sellIntent?.symbol === symbol ? sellIntent.quantity : undefined} symbol={symbol} stocks={stocks} onSymbolChange={onSymbolChange} active={view === 'local'} disabled={disabled} submitting={submitting} onSubmit={submit} /> : <p className="panel-message">Select a registered stock to place an order.</p>}</div>
       {book && <div className="terminal-book">{book}</div>}
     </div>
     <div hidden={view === 'hidden'} className={view === 'local' ? 'workspace-orders' : undefined}>

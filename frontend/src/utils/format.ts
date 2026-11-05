@@ -25,3 +25,8 @@ export function formatUtcDateTime(value: string): string {
 export function formatOrderPrice(value: number | null): string {
   return value === null ? '—' : orderPriceFormat.format(value)
 }
+
+export function formatMoney(value: number, signed = false): string {
+  const sign = value < 0 ? '−' : signed && value > 0 ? '+' : ''
+  return `${sign}$${priceFormat.format(Math.abs(value))}`
+}

@@ -37,3 +37,12 @@ it.each([['1D', '1Min'], ['1M', '1Hour'], ['1Y', '1Day']])('accepts the correct 
   response(wrap({ symbol: 'AAPL', range, interval, delayMinutes: 15, adjustment: 'split', candles: [] }))
   expect((await getExternalHistory(`history:AAPL:${range}`)).data.interval).toBe(interval)
 })
+
+it('accepts a ten-stock starter list and rejects duplicates', async () => {
+  const symbols = ['AAPL','TSLA','NVDA','MSFT','AMZN','GOOGL','META','AMD','AVGO','PLTR']
+  const instruments = symbols.map(symbol => ({ symbol, companyName: symbol, currency: 'USD' }))
+  response({ provider: 'Alpaca', feed: 'IEX', configured: false, instruments })
+  expect((await getMarketConnection()).instruments).toHaveLength(10)
+  response({ provider: 'Alpaca', feed: 'IEX', configured: false, instruments: [...instruments, instruments[0]] })
+  await expect(getMarketConnection()).rejects.toThrow('Invalid external watchlist')
+})

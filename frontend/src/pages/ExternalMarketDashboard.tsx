@@ -13,14 +13,14 @@ import { SymbolSearch } from '../components/workspace/SymbolSearch'
 import { MarketSession } from '../components/workspace/MarketSession'
 import { PriceAlerts } from '../components/workspace/PriceAlerts'
 
-function QuoteCard({ instrument, selected, snapshot, onSelect, configured, preview = true }: { instrument: Instrument; selected: boolean; snapshot: ExternalResponse<ExternalQuote> | null; configured: boolean; preview?: boolean; onSelect: () => void }) {
-  const { resource } = useSymbolResource(!selected && configured && preview ? `external:${instrument.symbol}` : null, getExternalQuote, 15000)
+function QuoteCard({ instrument, selected, snapshot, onSelect, configured }: { instrument: Instrument; selected: boolean; snapshot: ExternalResponse<ExternalQuote> | null; configured: boolean; onSelect: () => void }) {
+  const { resource } = useSymbolResource(!selected && configured ? `external:${instrument.symbol}` : null, getExternalQuote, 15000)
   const response = selected ? snapshot : resource.status === 'ready' ? resource.data : null
   const quote = response?.data
   const tone = quote?.change == null || quote.change === 0 ? 'neutral' : quote.change > 0 ? 'positive' : 'negative'
   return <button type="button" className={`stock-option ${selected ? 'selected' : ''}`} aria-label={`${instrument.symbol} ${instrument.companyName}`} aria-pressed={selected} onClick={onSelect}>
     <span className="stock-symbol">{instrument.symbol}</span><span className="stock-company">{instrument.companyName} · USD</span>
-    <span className="watch-quote"><strong><PriceValue value={quote?.price ?? null} /></strong><span className={tone}>{quote?.changePercent == null ? configured ? preview || selected ? 'Awaiting provider' : 'Select to load' : 'Not connected' : `${formatChange(quote.changePercent)}%`}</span></span>
+    <span className="watch-quote"><strong><PriceValue value={quote?.price ?? null} /></strong><span className={tone}>{quote?.changePercent == null ? configured ? 'Awaiting provider' : 'Not connected' : `${formatChange(quote.changePercent)}%`}</span></span>
     {response?.stale && <span className="watch-stale">Last cached quote</span>}
   </button>
 }
@@ -42,7 +42,7 @@ export function ExternalMarketDashboard() {
   const quote = useSymbolResource(connection?.configured ? `external:${symbol}` : null, getExternalQuote, 15000)
   const response = quote.resource.status === 'ready' ? quote.resource.data : null
   const saved = watch.resource.status === 'ready' ? watch.resource.data : []
-  const instruments = saved.length ? saved : connection?.instruments ?? []
+  const instruments = [...new Map([...(connection?.instruments ?? []), ...saved].map(item => [item.symbol, item])).values()]
   const instrument = picked?.symbol === symbol ? picked : instruments.find(item => item.symbol === symbol) ?? connection?.instruments.find(item => item.symbol === symbol)
   const select = (item: Instrument) => { setPicked(item) }
   const toggleWatch = async () => {
@@ -60,7 +60,7 @@ export function ExternalMarketDashboard() {
     {error && <div className="page-message" role="alert"><p>{error}</p><button type="button" className="primary-button" onClick={() => setAttempt(value => value + 1)}>Retry market connection</button></div>}
     {!connection && !error && <p className="panel-message" role="status">Loading market connection…</p>}
     {connection && <>
-      <div className="stock-panel"><div className="panel-heading"><h2>External watchlist</h2><span>Alpaca · IEX · USD</span></div><div className="stock-list" role="group" aria-label="Select an external stock">{instruments.map((item, index) => <QuoteCard key={item.symbol} instrument={item} selected={symbol === item.symbol} snapshot={response} preview={index < 6} configured={connection.configured} onSelect={() => select(item)} />)}</div></div>
+      <div className="stock-panel"><div className="panel-heading"><h2>External watchlist</h2><span>Starter stocks + saved favorites · Alpaca · IEX · USD</span></div><div className="stock-list external-stock-grid" role="group" aria-label="Select an external stock">{instruments.map((item) => <QuoteCard key={item.symbol} instrument={item} selected={symbol === item.symbol} snapshot={response} configured={connection.configured} onSelect={() => select(item)} />)}</div></div>
       {auth.user && instrument && <div className="watch-actions"><button className="text-button" disabled={saving || auth.busy} onClick={() => { void toggleWatch() }}>{saving ? 'Saving…' : saved.some(item => item.symbol === symbol) ? `Remove ${symbol} from watchlist` : `Save ${symbol} to watchlist`}</button><span>Saved to your account · Up to 20 stocks</span></div>}
       {!auth.user && <p className="panel-footnote">Sign in to save your watchlist across visits.</p>}
       {(watchError || watch.errorMessage) && <p role="alert">{watchError ?? watch.errorMessage}</p>}

@@ -21,7 +21,7 @@ function envelope(value: unknown): value is ExternalResponse<unknown> {
 export async function getMarketConnection(signal?: AbortSignal): Promise<MarketConnection> {
   const value = await get('/api/market/instruments', signal)
   if (!isRecord(value) || value.provider !== 'Alpaca' || value.feed !== 'IEX' || typeof value.configured !== 'boolean' || !Array.isArray(value.instruments)
-    || value.instruments.length > 2 || !value.instruments.every((item): item is Instrument => isRecord(item) && typeof item.symbol === 'string' && /^[A-Z][A-Z0-9.-]{0,14}$/.test(item.symbol) && typeof item.companyName === 'string' && item.currency === 'USD')
+    || value.instruments.length > 20 || !value.instruments.every((item): item is Instrument => isRecord(item) && typeof item.symbol === 'string' && /^[A-Z][A-Z0-9.-]{0,14}$/.test(item.symbol) && typeof item.companyName === 'string' && item.currency === 'USD')
     || new Set(value.instruments.map(item => item.symbol)).size !== value.instruments.length) throw new Error('Invalid external watchlist response.')
   return { provider: 'Alpaca', feed: 'IEX', configured: value.configured, instruments: value.instruments }
 }

@@ -1,3 +1,5 @@
+import { sellSharesEvent } from '../utils/tradeIntent'
+import type { SellIntent } from '../utils/tradeIntent'
 import { PaperAllocation } from '../components/workspace/PaperAllocation'
 import { useMarketStream } from '../hooks/useMarketStream'
 import { useEffect, useState } from 'react'
@@ -19,6 +21,16 @@ import { AdminStocks } from '../components/workspace/AdminStocks'
 export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders' | 'hidden'; onShowOrders: () => void }) {
   const [stocks, setStocks] = useState<StockMetadata[] | null>(null)
   const [symbol, setSymbol] = useState<string | null>(null)
+  const [sellIntent, setSellIntent] = useState<SellIntent | null>(null)
+  useEffect(() => {
+    const select = (event: Event) => {
+      const intent = (event as CustomEvent<SellIntent>).detail
+      if (!intent || typeof intent.symbol !== 'string' || !Number.isSafeInteger(intent.quantity) || intent.quantity < 1) return
+      setSymbol(intent.symbol); setSellIntent(intent)
+    }
+    window.addEventListener(sellSharesEvent, select)
+    return () => window.removeEventListener(sellSharesEvent, select)
+  }, [])
   const [error, setError] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const auth = useAuth()
@@ -31,6 +43,7 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
     }).catch(() => { if (!controller.signal.aborted) setError(true) })
     return () => controller.abort()
   }, [attempt])
+  const selectSymbol = (next: string) => { setSellIntent(null); setSymbol(next) }
   const live = useMarketStream(view === 'local' ? symbol : null)
   const summary = useSymbolResource(view === 'local' ? symbol : null, getMarketSnapshot)
   const snapshot = summary.resource.status === 'ready' ? summary.resource.data : null
@@ -38,8 +51,6 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
   const chart = view === 'local' && symbol ? <CandleChart key={symbol} symbol={symbol} /> : null
   const book = view === 'local' && symbol ? <div className="lower-panels"><MarketDepth key={`depth:${symbol}`} symbol={symbol} /><RecentTrades key={`trades:${symbol}`} symbol={symbol} /></div> : null
   return <>
-    {view === 'local' && <PaperAllocation symbol={symbol} />}
-    {view === 'local' && <p className="panel-footnote" role="status">{live ? 'Live local updates connected · polling safety net active' : 'Polling active · live connection reconnects automatically'}</p>}
     <section hidden={view === 'hidden'} className="local-intro dashboard-intro">
       <p className="eyebrow">LOCAL EXCHANGE · SIMULATED MATCHING</p>
       <h1>{view === 'orders' ? 'Your local orders.' : 'Your trading workspace.'}</h1>
@@ -47,11 +58,13 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
     </section>
     <div hidden={view !== 'local'}>
       <AdminStocks key={auth.user?.id ?? 'anonymous'} onRegistered={() => setAttempt(value => value + 1)} />
+      <PaperAllocation key={auth.user?.id ?? 'anonymous'} symbol={symbol} />
+{view === 'local' && <p className="panel-footnote" role="status">{live ? 'Live local updates connected · polling safety net active' : 'Polling active · live connection reconnects automatically'}</p>}
       {error ? <div role="alert" className="page-message"><p>Couldn’t load local stocks.</p><button className="primary-button" onClick={() => setAttempt(value => value + 1)}>Retry local stocks</button></div>
         : !stocks ? <p role="status" className="panel-message">Loading local stocks…</p>
           : stocks.length === 0 ? <div className="page-message"><h2>No local stocks registered</h2><p>An administrator needs to register a stock before trading can begin.</p></div>
             : <section className="local-ticker" aria-label="Local market summary">
-              <label>Local stock<select value={symbol ?? ''} onChange={event => setSymbol(event.target.value)}>{stocks.map(stock => <option key={stock.symbol} value={stock.symbol}>{stock.symbol} · {stock.companyName}</option>)}</select></label>
+              <label>Local stock<select value={symbol ?? ''} onChange={event => selectSymbol(event.target.value)}>{stocks.map(stock => <option key={stock.symbol} value={stock.symbol}>{stock.symbol} · {stock.companyName}</option>)}</select></label>
               <div className="local-last"><span className="metric-label">{symbol} · LOCAL LAST</span><strong><PriceValue value={snapshot?.lastTradedPrice ?? null} /></strong><span className={(snapshot?.priceChange ?? 0) < 0 ? 'negative' : 'positive'}>{formatChange(snapshot?.priceChange ?? null)} {snapshot?.priceChangePercent == null ? '' : `(${formatChange(snapshot.priceChangePercent)}%)`}</span></div>
               <div><span className="metric-label">BID / ASK</span><strong>{formatPrice(snapshot?.bestBidPrice ?? null)} / {formatPrice(snapshot?.bestAskPrice ?? null)}</strong></div>
               <div><span className="metric-label">VOLUME / TRADES</span><strong>{snapshot ? `${formatCount(snapshot.volume)} / ${formatCount(snapshot.tradeCount)}` : '—'}</strong></div>
@@ -61,6 +74,6 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
       {symbol && <RefreshStatus updatedAt={summary.updatedAt} refreshError={summary.refreshError} refreshing={summary.refreshing} onRetry={summary.retry} />}
       {!auth.user && selected && <div className="guest-local-panels">{chart}{book}</div>}
     </div>
-    <TradingWorkspace stocks={stocks ?? []} onSymbolChange={setSymbol} symbol={selected?.symbol ?? null} view={view} chart={chart} book={book} onShowOrders={onShowOrders} />
+    <TradingWorkspace sellIntent={sellIntent} stocks={stocks ?? []} onSymbolChange={selectSymbol} symbol={selected?.symbol ?? null} view={view} chart={chart} book={book} onShowOrders={onShowOrders} />
   </>
 }

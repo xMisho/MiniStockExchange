@@ -88,3 +88,11 @@ it('locks the ticket symbol while an order request is pending', () => {
   render(<OrderForm symbol="TSLA" disabled stocks={[{ symbol: 'TSLA', companyName: 'Tesla, Inc.', referencePrice: 200 }]} onSymbolChange={vi.fn()} onSubmit={submit} />)
   expect((screen.getByRole('combobox', { name: /Trade stock/ }) as HTMLSelectElement).closest('fieldset')?.disabled).toBe(true)
 })
+
+it('prepares a SELL ticket without submitting when opened from holdings', () => {
+  render(<OrderForm symbol="TSLA" initialSellQuantity={4} disabled={false} onSubmit={submit} />)
+  expect((screen.getByLabelText('Side') as HTMLSelectElement).value).toBe('SELL')
+  expect((screen.getByLabelText('Quantity') as HTMLInputElement).value).toBe('4')
+  expect(screen.getByText(/Nothing has been submitted/)).toBeTruthy()
+  expect(submit).not.toHaveBeenCalled()
+})

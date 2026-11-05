@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { formatChange, formatCount, formatPrice } from './format'
+import { formatChange, formatCount, formatPrice, formatMoney } from './format'
 
 it('keeps missing prices distinct from actual zero values', () => {
   expect(formatPrice(null)).toBe('—')
@@ -14,4 +14,12 @@ it('formats signs, two decimal prices and grouped counters consistently', () => 
   expect(formatChange(0)).toBe('0.00')
   expect(formatPrice(101.876)).toBe('101.88')
   expect(formatCount(12430)).toBe('12,430')
+})
+
+it('formats USD with clear signs while leaving share counts unprefixed', () => {
+  expect(formatMoney(100000)).toBe('$100,000.00')
+  expect(formatMoney(120, true)).toBe('+$120.00')
+  expect(formatMoney(-45, true)).toBe('−$45.00')
+  expect(formatMoney(0, true)).toBe('$0.00')
+  expect(formatCount(6)).toBe('6')
 })

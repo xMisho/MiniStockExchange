@@ -12,6 +12,13 @@ class ExternalMarketServiceTest {
         public Clock withZone(ZoneId zone) { return this; }
         public Instant instant() { return now; }
     }
+    @Test void starterCatalogContainsTenDistinctStocksWithoutInventedPrices() {
+        var client = mock(AlpacaMarketClient.class);
+        var service = new ExternalMarketService(client, new Time());
+        assertEquals(java.util.Set.of("AAPL","TSLA","NVDA","MSFT","AMZN","GOOGL","META","AMD","AVGO","PLTR"), ExternalMarketService.INSTRUMENTS.keySet());
+        for (String symbol : ExternalMarketService.INSTRUMENTS.keySet()) assertEquals(symbol, service.instrument(symbol).symbol());
+        verifyNoInteractions(client);
+    }
     @Test void coalescesCachedReadsAndBoundsStaleFallback() {
         var client = mock(AlpacaMarketClient.class);
         var time = new Time();

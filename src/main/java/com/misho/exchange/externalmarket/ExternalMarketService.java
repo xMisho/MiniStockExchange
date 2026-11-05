@@ -11,7 +11,11 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ExternalMarketService {
-    public static final Map<String, String> INSTRUMENTS = Map.of("AAPL", "Apple Inc.", "TSLA", "Tesla, Inc.");
+    public static final Map<String, String> INSTRUMENTS = Map.of(
+            "AAPL", "Apple Inc.", "TSLA", "Tesla, Inc.", "NVDA", "NVIDIA Corporation",
+            "MSFT", "Microsoft Corporation", "AMZN", "Amazon.com, Inc.", "GOOGL", "Alphabet Inc.",
+            "META", "Meta Platforms, Inc.", "AMD", "Advanced Micro Devices, Inc.",
+            "AVGO", "Broadcom Inc.", "PLTR", "Palantir Technologies Inc.");
     private record Cached(Object data, Instant fetchedAt, Instant retryAt, ExternalMarketException failure) { }
     private final AlpacaMarketClient client;
     private final Clock clock;

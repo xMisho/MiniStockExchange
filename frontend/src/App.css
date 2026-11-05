@@ -363,3 +363,14 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 
 .primary-button, .text-button, .chart-switch button { text-align: center; }
 .order-actions { align-items: center; }
+
+.stock-preset { display: grid; gap: 8px; max-width: 420px; margin-block: 14px; color: var(--muted); }
+.stock-preset select { min-height: 44px; width: 100%; }
+.admin-stocks summary { font-size: 1rem; line-height: 1.5; }
+.portfolio-metrics dd, .portfolio-scroll td { font-variant-numeric: tabular-nums; }
+
+.external-stock-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: visible; }
+.external-stock-grid .stock-option { max-width: none; min-width: 0; height: 100%; }
+@media (max-width: 1000px) { .external-stock-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .external-stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .external-stock-grid { grid-template-columns: minmax(0, 1fr); } }

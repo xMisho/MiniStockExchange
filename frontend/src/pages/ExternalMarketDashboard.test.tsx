@@ -32,3 +32,22 @@ it('switches independent provider quotes and charts and identifies provenance', 
   expect(screen.getByRole('region', { name: 'TSLA external market quote' })).toBeTruthy()
   expect(screen.getByText('TSLA provider chart')).toBeTruthy()
 })
+
+it('renders all ten starter stocks without requiring external credentials', async () => {
+  const symbols = ['AAPL','TSLA','NVDA','MSFT','AMZN','GOOGL','META','AMD','AVGO','PLTR']
+  vi.mocked(getMarketConnection).mockResolvedValue({provider:'Alpaca',feed:'IEX',configured:false,instruments:symbols.map(symbol=>({symbol,companyName:symbol,currency:'USD'}))})
+  render(<ExternalMarketDashboard />)
+  await screen.findByText('Connect Alpaca to load real prices')
+  expect(screen.getByRole('group',{name:'Select an external stock'}).querySelectorAll('button')).toHaveLength(10)
+  expect(getExternalQuote).not.toHaveBeenCalled()
+})
+
+it('automatically requests quotes for all ten starter stocks without selecting them', async () => {
+  const symbols = ['AAPL','TSLA','NVDA','MSFT','AMZN','GOOGL','META','AMD','AVGO','PLTR']
+  vi.mocked(getMarketConnection).mockResolvedValue({provider:'Alpaca',feed:'IEX',configured:true,instruments:symbols.map(symbol=>({symbol,companyName:symbol,currency:'USD'}))})
+  vi.mocked(getExternalQuote).mockImplementation(() => new Promise(() => {}))
+  render(<ExternalMarketDashboard />)
+  await act(async () => {})
+  expect(new Set(vi.mocked(getExternalQuote).mock.calls.map(([key]) => key))).toEqual(new Set(symbols.map(symbol => `external:${symbol}`)))
+  expect(screen.queryByText('Select to load')).toBeNull()
+})

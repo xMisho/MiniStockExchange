@@ -15,7 +15,7 @@ export function OrderRow({ order, ...actions }: Props) {
     <td role="cell" data-label="Original qty">{formatCount(order.originalQuantity)}</td>
     <td role="cell" data-label="Filled">{formatCount(order.filledQuantity)}</td>
     <td role="cell" data-label="Remaining">{formatCount(order.remainingQuantity)}</td>
-    <td role="cell" data-label="Status" className="order-state-cell"><span className={`order-status status-${order.status.toLowerCase()}`}>{order.status.replace('_', ' ')}</span></td>
+    <td role="cell" data-label="Status" className="order-state-cell"><span className={`order-status status-${order.status.toLowerCase()}`}>{order.status.replace('_', ' ')}</span>{order.status === 'OPEN' && <small className="cell-secondary">Waiting for a match</small>}{order.status === 'PARTIALLY_FILLED' && <small className="cell-secondary">Remaining shares waiting</small>}</td>
     <td role="cell" data-label="Actions" className="order-actions-cell"><OrderActions order={order} {...actions} /><button type="button" className="text-button" aria-expanded={expanded} aria-controls={activityId} onClick={() => setExpanded(value => !value)}>{expanded ? 'Hide order activity' : 'Order activity'}</button></td>
   </tr>{expanded && <tr className="order-activity-row"><td colSpan={8} id={activityId}><OrderLifecycle order={order} expanded /></td></tr>}</>
 }

@@ -11,7 +11,7 @@ export function PaperAllocation({ symbol }: { symbol: string | null }) {
   const locked = useRef(false)
   const [message, setMessage] = useState('')
   if (auth.user?.role !== 'ADMIN' || !symbol) return null
-  return <details className="data-panel"><summary>Admin · allocate demo shares</summary>
+  return <details className="data-panel admin-stocks"><summary>Admin · Allocate demo shares</summary>
     <p>Purchase {symbol} shares from the virtual treasury at this stock’s reference price using the recipient’s available virtual cash. Recorded with your admin ID. No real money.</p>
     <form className="trading-form" onSubmit={event => {
       event.preventDefault(); if (locked.current) return
