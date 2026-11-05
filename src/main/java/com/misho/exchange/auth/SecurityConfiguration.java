@@ -16,19 +16,20 @@ import tools.jackson.databind.ObjectMapper;
 public class SecurityConfiguration {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, ObjectMapper json, RememberedLoginService rememberedLogin)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, UserService users, ObjectMapper json, RememberedLoginService rememberedLogin, com.misho.exchange.ratelimit.RequestLimits limits, com.misho.exchange.observability.TradingMetrics metrics)
             throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
-                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/assets/**", "/THIRD_PARTY_NOTICES.md", "/api/ready", "/api/health", "/api/stocks", "/api/stocks/*",
+                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/assets/**", "/THIRD_PARTY_NOTICES.md", "/api/ready", "/api/live", "/api/health", "/api/events", "/api/stocks", "/api/stocks/*",
                                 "/api/auth/csrf", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/stocks").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/stocks", "/api/admin/paper-allocations").hasRole("ADMIN")
                         .requestMatchers("/api/watchlist", "/api/watchlist/*", "/api/alerts", "/api/alerts/*", "/api/portfolio").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*", "/api/orders/*/lifecycle", "/api/stocks/*/order-preview").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*", "/api/orders/*/lifecycle", "/api/stocks/*/order-preview", "/api/stocks/*/balance").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/stocks/*/orders").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/orders/*").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/orders/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/*", "/actuator/prometheus").hasRole("ADMIN")
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) -> {
@@ -54,6 +55,7 @@ public class SecurityConfiguration {
                             response.getWriter().write(json.writeValueAsString(user));
                         })
                         .failureHandler((request, response, exception) -> {
+                            metrics.increment("login.failures");
                             response.setStatus(401);
                             response.setContentType("application/json");
                             response.getWriter().write("{\"error\":\"Invalid username or password.\"}");
@@ -67,6 +69,10 @@ public class SecurityConfiguration {
                         .logoutSuccessHandler((request, response, authentication) -> response.setStatus(204)))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable);
+        http.addFilterBefore(new com.misho.exchange.ratelimit.RateLimitFilter(limits, true, metrics),
+                org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(new com.misho.exchange.ratelimit.RateLimitFilter(limits, false, metrics),
+                org.springframework.security.web.access.intercept.AuthorizationFilter.class);
         return http.build();
     }
 }

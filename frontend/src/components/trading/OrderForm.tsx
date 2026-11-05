@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { getOrderPreview, orderQuantity, priceJson } from '../../api/orders'
-import { getPortfolio } from '../../api/workspace'
+import { getOrderPreview, getTradingBalance, orderQuantity, priceJson } from '../../api/orders'
 import { getMarketSnapshot } from '../../api/marketData'
 import { useSymbolResource } from '../../hooks/useSymbolResource'
 import { bookPriceEvent } from '../../utils/bookEvents'
@@ -19,7 +18,7 @@ export function OrderForm({ symbol, disabled, submitting = false, active = true,
   const [error, setError] = useState<{ field: 'quantity' | 'price'; message: string } | null>(null)
   const [estimate, setEstimate] = useState<{ key: string; value?: FillPreview; error?: string } | null>(null)
   const quote = useSymbolResource(active ? symbol : null, getMarketSnapshot)
-  const account = useSymbolResource(active ? symbol : null, getPortfolio, 5000)
+  const account = useSymbolResource(active ? symbol : null, getTradingBalance, 5000)
   const snapshot = quote.resource.status === 'ready' ? quote.resource.data : null
   const portfolio = account.resource.status === 'ready' ? account.resource.data : null
   const estimateKey = `${symbol}:${side}:${quantity}`
@@ -76,8 +75,8 @@ export function OrderForm({ symbol, disabled, submitting = false, active = true,
   return <section className="data-panel" aria-label="Submit an order" aria-busy={submitting}>
     <div className="data-heading"><div><p className="eyebrow">SIMULATED TRADING</p><h2>Place an order</h2></div><span>{symbol} · No real money</span></div>
     <div className="ticket-context"><strong>Local simulated exchange · {symbol}</strong><p>Local bid {formatOrderPrice(snapshot?.bestBidPrice ?? null)} · Ask {formatOrderPrice(snapshot?.bestAskPrice ?? null)}</p>
-      <p>Paper cash {portfolio ? `$${formatPrice(portfolio.cash)}` : '—'} · Holdings {portfolio ? formatCount(portfolio.positions.find(p => p.symbol === symbol)?.quantity ?? 0) : '—'} shares</p>
-      <small>Informational balances: cash is not reserved; short positions and negative cash are allowed. {account.refreshError || quote.refreshError ? 'Previous data: refresh unavailable.' : ''}</small></div>
+      <p>Available paper cash {portfolio ? `$${formatPrice(portfolio.availableCash)}` : '—'} · Available holdings {portfolio ? formatCount(portfolio.availableShares) : '—'} shares</p>
+      <small>Open limit orders reserve cash or shares. Short selling and borrowing are disabled. {account.refreshError || quote.refreshError ? 'Previous data: refresh unavailable.' : ''}</small></div>
     <form className={`trading-form side-${side.toLowerCase()}`} onSubmit={(event) => { void submit(event) }}>
       <fieldset disabled={disabled}>
         <legend className="sr-only">Order details for {symbol}</legend>

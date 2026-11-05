@@ -55,16 +55,23 @@ public class TradingService {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final MarketWriter writer;
+    private final RiskControls risk;
+    private final com.misho.exchange.observability.TradingMetrics metrics;
+    private final com.misho.exchange.marketdata.MarketEvents events;
+    private final tools.jackson.databind.ObjectMapper json;
 
     public TradingService(StockRepository stocks, UserRepository users, OrderRepository orders,
                           TradeRepository trades, MarketLoader loader, MarketRegistry registry,
-                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager, CandleRepository candles, MarketWriter writer) {
+                          JdbcTemplate jdbc, PlatformTransactionManager transactionManager, CandleRepository candles, MarketWriter writer,
+                          RiskControls risk, com.misho.exchange.observability.TradingMetrics metrics,
+                          com.misho.exchange.marketdata.MarketEvents events, tools.jackson.databind.ObjectMapper json) {
         this.stocks = stocks;
         this.users = users;
         this.orders = orders;
         this.trades = trades;
         this.candles = candles;
         this.writer = writer;
+        this.risk = risk; this.metrics = metrics; this.events = events; this.json = json;
         this.loader = loader;
         this.registry = registry;
         this.jdbc = jdbc;
@@ -75,6 +82,7 @@ public class TradingService {
     @EventListener(ApplicationReadyEvent.class)
     public synchronized void restoreOnStartup() {
         requireNoOuterTransaction();
+        metrics.increment("recovery.attempts");
         try {
             var restored = transaction(() -> {
                 var result = new HashMap<String, MatchingEngine>();
@@ -86,12 +94,19 @@ public class TradingService {
             registry.replaceAll(restored);
         } catch (RuntimeException | Error exception) {
             registry.markAllUnavailable();
+            metrics.increment("recovery.failures");
             throw exception;
         }
     }
 
     public synchronized PersistedOrder submitOrder(Long actorId, String symbol, OrderSide side,
                                                     OrderType type, BigDecimal price, int quantity) {
+        return submitOrder(actorId, symbol, side, type, price, quantity, null);
+    }
+
+    public synchronized PersistedOrder submitOrder(Long actorId, String symbol, OrderSide side,
+                                                    OrderType type, BigDecimal price, int quantity, String key) {
+        if (key != null && !key.matches("[A-Za-z0-9_-]{16,128}")) throw new IllegalArgumentException("Invalid idempotency key.");
         String canonical = symbol(symbol);
         if (side == null || type == null || quantity <= 0) {
             throw new IllegalArgumentException("Valid side, type, and positive quantity are required.");
@@ -102,15 +117,35 @@ public class TradingService {
             if (price != null) { throw new IllegalArgumentException("Market orders have no limit price."); }
             validatedPrice = null;
         }
+        String fingerprint = fingerprint(canonical + ":" + side + ":" + type + ":" +
+                (validatedPrice == null ? "" : validatedPrice.stripTrailingZeros().toPlainString()) + ":" + quantity);
+        if (key != null) {
+            PersistedOrder saved = transaction(() -> {
+                actor(actorId);
+                var records = jdbc.queryForList("SELECT fingerprint, response_json FROM exchange.order_requests WHERE user_id=? AND request_key=?", actorId, key);
+                if (records.isEmpty()) return null;
+                if (!records.get(0).get("fingerprint").equals(fingerprint))
+                    throw new TradingConflictException("IDEMPOTENCY_CONFLICT", "This request key was already used with different order details.");
+                metrics.increment("idempotency.replays");
+                return json.readValue((String) records.get(0).get("response_json"), PersistedOrder.class);
+            });
+            if (saved != null) return saved;
+        }
         return change(canonical, market -> {
             UserEntity owner = actor(actorId);
+            BigDecimal cost = type == OrderType.LIMIT ? validatedPrice.multiply(BigDecimal.valueOf(quantity))
+                    : marketCost(market.engine(), side, quantity);
+            risk.require(owner.getId(), canonical, side, quantity, cost, null);
             var row = orders.saveAndFlush(new OrderEntity(owner, market.stock(), side, type,
                     validatedPrice, quantity, orders.nextPrioritySequence(), Instant.now()));
             market.orders().put(row.getId(), row);
-            market.engine().submitOrder(Order.restore(new OrderSnapshot(row.getId(), side, type,
-                    validatedPrice, quantity, quantity, 0, OrderStatus.OPEN, row.getCreatedAt().toEpochMilli())));
+            metrics.timed("matching", () -> {
+                market.engine().submitOrder(Order.restore(new OrderSnapshot(row.getId(), side, type,
+                        validatedPrice, quantity, quantity, 0, OrderStatus.OPEN, row.getCreatedAt().toEpochMilli())));
+                return null;
+            });
             return new Change(row, row.getPrioritySequence(), true, "SUBMITTED", quantity);
-        }).order();
+        }, actorId, key, fingerprint).order();
     }
 
     public synchronized boolean cancelOrder(Long actorId, long orderId) {
@@ -120,7 +155,7 @@ public class TradingService {
             var row = orders.findById(orderId).orElseThrow(OrderNotFoundException::new);
             market.orders().put(orderId, row);
             authorize(actor(actorId), row);
-            boolean cancelled = market.engine().cancelOrder(orderId);
+            boolean cancelled = metrics.timed("matching", () -> market.engine().cancelOrder(orderId));
             return new Change(row, row.getPrioritySequence(), cancelled, "CANCELLED", row.getRemainingQuantity());
         }).changed();
     }
@@ -137,9 +172,11 @@ public class TradingService {
             }
             BigDecimal price = PersistenceValues.price(newPrice);
             if (remaining <= 0) { throw new IllegalArgumentException("Remaining quantity must be positive."); }
+            risk.require(row.getUser().getId(), symbol, row.getSide(), remaining,
+                    price.multiply(BigDecimal.valueOf(remaining)), row.getId());
             boolean losesPriority = row.getLimitPrice().compareTo(price) != 0 || remaining > row.getRemainingQuantity();
             long priority = losesPriority ? orders.nextPrioritySequence() : row.getPrioritySequence();
-            boolean amended = market.engine().amendOrder(orderId, price, remaining);
+            boolean amended = metrics.timed("matching", () -> market.engine().amendOrder(orderId, price, remaining));
             return new Change(row, priority, amended, "AMENDED", remaining);
         }).changed();
     }
@@ -245,6 +282,7 @@ public class TradingService {
 
     public synchronized void recoverMarket(String symbol) {
         String canonical = symbol(symbol);
+        metrics.increment("recovery.attempts");
         try {
             MatchingEngine engine = transaction(() -> loader.load(canonical).engine());
             registry.publish(canonical, engine);
@@ -253,29 +291,47 @@ public class TradingService {
             throw exception;
         } catch (RuntimeException | Error exception) {
             registry.markUnavailable(canonical);
+            metrics.increment("recovery.failures");
             throw exception;
         }
     }
 
     private Result change(String symbol, Function<LoadedMarket, Change> action) {
+        return change(symbol, action, null, null, null);
+    }
+
+    private Result change(String symbol, Function<LoadedMarket, Change> action, Long actorId, String key, String fingerprint) {
         requireNoOuterTransaction();
         registry.requireAvailable(symbol);
         try {
             MatchingEngine engine = market(symbol);
             Pending pending = transaction(() -> {
+                if (key != null) {
+                    var previous = jdbc.queryForList("SELECT fingerprint, response_json FROM exchange.order_requests WHERE user_id=? AND request_key=?", actorId, key);
+                    if (!previous.isEmpty()) {
+                        if (!previous.get(0).get("fingerprint").equals(fingerprint))
+                            throw new TradingConflictException("IDEMPOTENCY_CONFLICT", "This request key was already used with different order details.");
+                        metrics.increment("idempotency.replays");
+                        return new Pending(engine, new Result(json.readValue((String) previous.get(0).get("response_json"), PersistedOrder.class), false));
+                    }
+                }
                 LoadedMarket market = loader.forCommand(symbol, engine);
-                Change change = action.apply(market);
+                Change change = metrics.timed("command", () -> action.apply(market));
                 persist(market, change);
-                return new Pending(market.engine(), new Result(PersistedOrder.from(change.row()), change.changed()));
+                PersistedOrder result = PersistedOrder.from(change.row());
+                if (key != null) jdbc.update("INSERT INTO exchange.order_requests (user_id, request_key, fingerprint, order_id, response_json) VALUES (?,?,?,?,?)",
+                        actorId, key, fingerprint, result.id(), json.writeValueAsString(result));
+                return new Pending(market.engine(), new Result(result, change.changed()));
             });
             registry.publish(symbol, pending.engine());
+            if (pending.result().changed()) events.committed(symbol);
             return pending.result();
         } catch (UnknownMarketException exception) {
             registry.forget(symbol);
             throw exception;
         } catch (RuntimeException | Error exception) {
             try { recoverMarket(symbol); }
-            catch (RuntimeException | Error recoveryFailure) { exception.addSuppressed(recoveryFailure); }
+            catch (RuntimeException | Error recoveryFailure) { if (exception != recoveryFailure) exception.addSuppressed(recoveryFailure); }
             if (exception instanceof Error error) { throw error; }
             if (exception instanceof IllegalArgumentException argument) { throw argument; }
             if (exception instanceof AccessDeniedException denied) { throw denied; }
@@ -315,6 +371,12 @@ public class TradingService {
                         market.orders().get(trade.getSellOrderId()), trade.getExecutionPrice(),
                         trade.getQuantity(), Instant.ofEpochMilli(trade.getTimestamp()))).toList();
         trades.saveAllAndFlush(executions);
+        if (!newTrades.isEmpty()) {
+            orders.flush();
+            var participants = new java.util.HashSet<Long>();
+            for (Long id : affectedIds) participants.add(market.orders().get(id).getUser().getId());
+            for (Long user : participants) risk.requireSolvent(user, market.stock().getSymbol());
+        }
         if (change.changed()) {
             var row = change.row();
             jdbc.update("""
@@ -373,13 +435,59 @@ public class TradingService {
 
     private <T> T transaction(Supplier<T> operation, boolean startup) {
         requireNoOuterTransaction();
-        return transactions.execute(status -> {
+        try { return metrics.timed("transaction", () -> transactions.execute(status -> {
             jdbc.execute("SET LOCAL lock_timeout = '5s'");
             jdbc.execute("SELECT pg_advisory_xact_lock(8243061201)");
             if (startup) { writer.claim(); }
             else { writer.requireOwner(); }
             return operation.get();
+        })); } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException failure) {
+            metrics.increment("database.failures"); throw failure;
+        }
+    }
+
+    public synchronized RiskControls.Balance balance(Long actorId, String symbol) {
+        return transaction(() -> {
+            actor(actorId); String canonical = symbol(symbol);
+            if (!stocks.existsById(canonical)) throw new UnknownMarketException();
+            return risk.balance(actorId, canonical, null);
         });
+    }
+
+    public synchronized void allocate(Long operator, Long recipient, String symbol, int quantity) {
+        if (quantity <= 0) throw new IllegalArgumentException("Positive allocation quantity required.");
+        transaction(() -> {
+            if (actor(operator).getRole() != UserRole.ADMIN) throw new AccessDeniedException("Admin required.");
+            actor(recipient);
+            var stock = stocks.findById(symbol(symbol)).orElseThrow(UnknownMarketException::new);
+            BigDecimal price = stock.getReferencePrice();
+            // Allocations always require cash, even in tests that disable legacy order-risk checks.
+            if (risk.balance(recipient, stock.getSymbol(), null).availableCash().compareTo(price.multiply(BigDecimal.valueOf(quantity))) < 0)
+                throw new TradingConflictException("INSUFFICIENT_CASH", "Insufficient available virtual cash for allocation.");
+            jdbc.update("INSERT INTO exchange.paper_allocations (user_id, stock_symbol, quantity, price, operator_id) VALUES (?,?,?,?,?)",
+                    recipient, stock.getSymbol(), quantity, price, operator);
+            return null;
+        });
+        events.committed(symbol(symbol));
+    }
+
+    private BigDecimal marketCost(MatchingEngine engine, OrderSide side, int quantity) {
+        if (side != OrderSide.BUY) return BigDecimal.ZERO;
+        int remaining = quantity;
+        BigDecimal value = BigDecimal.ZERO;
+        for (var level : engine.getMarketSnapshot().sellDepth().entrySet()) {
+            int fill = (int) Math.min((long) remaining, level.getValue());
+            value = value.add(level.getKey().multiply(BigDecimal.valueOf(fill)));
+            remaining -= fill;
+            if (remaining == 0) break;
+        }
+        return value;
+    }
+
+    private String fingerprint(String payload) {
+        try { return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
+        catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
 
     private void requireNoOuterTransaction() {

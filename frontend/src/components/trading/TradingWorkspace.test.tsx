@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.mocked(amendOrder).mockResolvedValue(undefined)
   vi.mocked(cancelOrder).mockResolvedValue(undefined)
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); sessionStorage.clear() })
 function fillOrder() {
   fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '5' } })
   fireEvent.change(screen.getByLabelText('Limit price'), { target: { value: '100.2500' } })
@@ -41,7 +41,7 @@ it('submits a limit order once and shows the backend-confirmed ID and status', a
   fillOrder()
   fireEvent.click(screen.getByRole('button', { name: 'Submit BUY order' }))
   expect(await screen.findByText(/Order #12 · AAPL · OPEN/)).toBeTruthy()
-  expect(submitOrder).toHaveBeenCalledWith('AAPL', { side: 'BUY', type: 'LIMIT', quantity: 5, limitPrice: '100.2500' })
+  expect(submitOrder).toHaveBeenCalledWith('AAPL', { side: 'BUY', type: 'LIMIT', quantity: 5, limitPrice: '100.2500' }, expect.any(String))
   expect(refreshMarket).toHaveBeenCalledWith('AAPL')
   expect(getMyOrders).toHaveBeenCalledTimes(2)
   expect(auth.holdSession).toHaveBeenCalledOnce()
@@ -54,7 +54,7 @@ it('disables market price and sends no limit price', async () => {
   fireEvent.change(screen.getByLabelText('Side'), { target: { value: 'SELL' } })
   fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '3' } })
   fireEvent.click(screen.getByRole('button', { name: 'Submit SELL order' }))
-  await waitFor(() => expect(submitOrder).toHaveBeenCalledWith('AAPL', { side: 'SELL', type: 'MARKET', quantity: 3 }))
+  await waitFor(() => expect(submitOrder).toHaveBeenCalledWith('AAPL', { side: 'SELL', type: 'MARKET', quantity: 3 }, expect.any(String)))
 })
 it('prevents duplicate clicks while a mutation is in flight', async () => {
   let resolve!: (order: Order) => void
@@ -234,4 +234,18 @@ it('keeps uncertain warnings and mutation blocking across Markets and My Orders'
   expect(submitOrder).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole('button', { name: 'I have checked My Orders' }))
   expect(screen.queryByText('Do not resubmit blindly.')).toBeNull()
+})
+
+it('retries an uncertain submission explicitly with the identical key and payload after reload', async () => {
+  vi.mocked(submitOrder).mockRejectedValueOnce(new OrderRequestError('Uncertain', true, 503)).mockResolvedValue(open)
+  const view = render(<TradingWorkspace symbol="AAPL" />); fillOrder()
+  fireEvent.click(screen.getByRole('button', { name: 'Submit BUY order' }))
+  await screen.findByRole('button', { name: 'Retry same submission safely' })
+  const first = vi.mocked(submitOrder).mock.calls[0]
+  expect(sessionStorage.getItem('verdex:pending-order:1')).toContain(first[2])
+  view.unmount(); render(<TradingWorkspace symbol="TSLA" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Retry same submission safely' }))
+  await screen.findByText(/Order #12 · AAPL · OPEN/)
+  expect(vi.mocked(submitOrder).mock.calls[1]).toEqual(first)
+  expect(sessionStorage.getItem('verdex:pending-order:1')).toBeNull()
 })

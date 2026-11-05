@@ -1,3 +1,4 @@
+import { rateLimitedFetch, RateLimitError } from './rateLimit'
 import { isFiniteNumber, isRecord } from './client'
 import type { ExternalBar, ExternalHistory, ExternalQuote, ExternalResponse, HistoryRange, Instrument, MarketConnection } from '../types/externalMarket'
 const instant = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value))
@@ -6,8 +7,8 @@ const optionalNumber = (value: unknown) => value === null || isFiniteNumber(valu
 const count = (value: unknown) => value === null || isFiniteNumber(value) && Number.isSafeInteger(value) && value >= 0
 async function get(path: string, signal?: AbortSignal): Promise<unknown> {
   let response: Response
-  try { response = await fetch(path, { credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000) }) }
-  catch { throw new Error('Couldn’t reach the market-data server. Check your connection and retry.') }
+  try { response = await rateLimitedFetch(path, { credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000) }) }
+  catch (error) { if (error instanceof RateLimitError) throw error; throw new Error('Couldn’t reach the market-data server. Check your connection and retry.') }
   const body: unknown = await response.json()
   if (!response.ok) throw new Error(isRecord(body) && typeof body.error === 'string' ? body.error : 'External market data is unavailable.')
   return body

@@ -32,8 +32,8 @@ export function orderQuantity(value: string): number {
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 2147483647) throw new Error('Quantity must be between 1 and 2,147,483,647.')
   return quantity
 }
-async function mutate(path: string, method: string, body?: string) {
-  try { return await csrfRequest(path, { method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body }) }) }
+async function mutate(path: string, method: string, body?: string, requestKey?: string) {
+  try { return await csrfRequest(path, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(requestKey ? { 'Idempotency-Key': requestKey } : {}) }, ...(body === undefined ? {} : { body }) }) }
   catch (error) {
     if (error instanceof AuthError) {
       const uncertain = error.mutationSent && (error.status === 0 || error.status >= 500 || error.retrySafe === false || error.code === 'TRADING_OUTCOME_UNCERTAIN')
@@ -42,11 +42,11 @@ async function mutate(path: string, method: string, body?: string) {
     throw new OrderRequestError(error instanceof Error ? error.message : 'Couldn’t prepare the order request.')
   }
 }
-export async function submitOrder(symbol: string, order: SubmitOrder): Promise<Order> {
+export async function submitOrder(symbol: string, order: SubmitOrder, requestKey: string = crypto.randomUUID()): Promise<Order> {
   const quantity = orderQuantity(String(order.quantity))
   const fields = JSON.stringify({ side: order.side, type: order.type, quantity })
   const body = order.type === 'LIMIT' ? `${fields.slice(0, -1)},"limitPrice":${priceJson(order.limitPrice ?? '')}}` : fields
-  const response = await mutate(`/api/stocks/${encodeURIComponent(symbol)}/orders`, 'POST', body)
+  const response = await mutate(`/api/stocks/${encodeURIComponent(symbol)}/orders`, 'POST', body, requestKey)
   try {
     const result: unknown = await response.json()
     if (!isOrder(result) || result.symbol !== symbol) throw new Error('Invalid order response')
@@ -87,4 +87,14 @@ export async function getOrderEvents(id: number, signal: AbortSignal): Promise<O
   const v: unknown = await response.json()
   if (!Array.isArray(v) || v.length > 100 || !v.every(e => isRecord(e) && counter(e.id) && ['SUBMITTED', 'AMENDED', 'CANCELLED', 'FILL'].includes(e.kind as string) && instant(e.occurred_at) && counter(e.quantity) && (e.price === null || isFiniteNumber(e.price)) && (e.previous_price === null || isFiniteNumber(e.previous_price)) && ['previous_remaining', 'remaining_quantity', 'filled_quantity'].every(k => e[k] === null || counter(e[k])))) throw new Error('Invalid order activity response.')
   return v as OrderEvent[]
+}
+
+export interface TradingBalance { cash: number; reservedCash: number; availableCash: number; holdings: number; reservedShares: number; availableShares: number }
+export async function getTradingBalance(symbol: string, signal: AbortSignal): Promise<TradingBalance> {
+  const value: unknown = await (await authenticatedRequest(`/api/stocks/${encodeURIComponent(symbol)}/balance`, signal)).json()
+  if (!isRecord(value) || !['cash', 'reservedCash', 'availableCash', 'holdings', 'reservedShares', 'availableShares'].every(k => isFiniteNumber(value[k]))) throw new Error('Invalid account balance response.')
+  return value as unknown as TradingBalance
+}
+export async function allocatePaperShares(userId: number, symbol: string, quantity: number) {
+  await csrfRequest('/api/admin/paper-allocations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, symbol, quantity }) })
 }

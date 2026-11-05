@@ -30,13 +30,26 @@ public class TradingController {
 
     @PostMapping("/stocks/{symbol}/orders")
     public ResponseEntity<OrderResponse> submit(Principal principal, @PathVariable String symbol,
-                                               @RequestBody SubmitOrderRequest request) {
+                                               @RequestBody SubmitOrderRequest request,
+                                               @org.springframework.web.bind.annotation.RequestHeader(value="Idempotency-Key", required=false) String requestKey) {
         if (request == null || request.quantity() == null) {
             throw new IllegalArgumentException("Order quantity is required.");
         }
         PersistedOrder order = trading.submitOrder(actor(principal), symbol, request.side(), request.type(),
-                request.limitPrice(), request.quantity());
+                request.limitPrice(), request.quantity(), requestKey);
         return ResponseEntity.created(URI.create("/api/orders/" + order.id())).body(OrderResponse.from(order));
+    }
+
+    @GetMapping("/stocks/{symbol}/balance")
+    public RiskControls.Balance balance(Principal principal, @PathVariable String symbol) {
+        return trading.balance(actor(principal), symbol);
+    }
+    public record Allocation(Long userId, String symbol, Integer quantity) { }
+    @PostMapping("/admin/paper-allocations")
+    public ResponseEntity<Void> allocate(Principal principal, @RequestBody Allocation request) {
+        if (request == null || request.userId() == null || request.quantity() == null) throw new IllegalArgumentException("Allocation fields required.");
+        trading.allocate(actor(principal), request.userId(), request.symbol(), request.quantity());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/stocks/{symbol}/order-preview")

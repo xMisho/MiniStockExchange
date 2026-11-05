@@ -22,7 +22,7 @@ it('omits price entirely for market orders', async () => {
   await submitOrder('AAPL', { side: 'BUY', type: 'MARKET', quantity: 5, limitPrice: '100' })
   expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ side: 'BUY', type: 'MARKET', quantity: 5 })
 })
-it.each([400, 409, 403])('preserves a definite backend rejection (%s)', async (status) => {
+it.each([400, 409, 403, 429])('preserves a definite backend rejection (%s)', async (status) => {
   const fetcher = vi.fn().mockResolvedValueOnce(reply(csrf)).mockResolvedValueOnce(reply({ error: 'Order rejected.' }, status))
   vi.stubGlobal('fetch', fetcher)
   await expect(cancelOrder(12)).rejects.toMatchObject({ message: 'Order rejected.', status, uncertain: false })

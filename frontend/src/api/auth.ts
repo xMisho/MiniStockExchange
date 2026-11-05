@@ -1,3 +1,4 @@
+import { rateLimitedFetch, RateLimitError } from './rateLimit'
 import { isRecord } from './client'
 
 export interface User { id: number; username: string; email: string; role: 'USER' | 'ADMIN' }
@@ -18,8 +19,8 @@ async function request(path: string, init: RequestInit = {}, protectedRequest = 
   const mutationSent = !['GET', 'HEAD'].includes(init.method ?? 'GET')
   const timeout = AbortSignal.timeout(8000)
   try {
-    response = await fetch(path, { ...init, credentials: 'same-origin', signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout, headers: { Accept: 'application/json', ...init.headers } })
-  } catch { throw new AuthError(mutationSent ? 'Couldn’t reach the server. The request outcome may be unknown; check before trying again.' : 'Couldn’t reach the server. Check your connection and try again.', 0, mutationSent) }
+    response = await rateLimitedFetch(path, { ...init, credentials: 'same-origin', signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout, headers: { Accept: 'application/json', ...init.headers } })
+  } catch (error) { if (error instanceof RateLimitError) throw new AuthError(error.message, 429, false, 'RATE_LIMITED'); throw new AuthError(mutationSent ? 'Couldn’t reach the server. The request outcome may be unknown; check before trying again.' : 'Couldn’t reach the server. Check your connection and try again.', 0, mutationSent) }
   if (!response.ok) {
     if (init.signal?.aborted) throw new DOMException('Request aborted', 'AbortError')
     if (response.status === 401 && protectedRequest) expiredListeners.forEach((listener) => listener())

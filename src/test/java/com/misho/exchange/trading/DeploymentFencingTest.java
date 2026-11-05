@@ -39,6 +39,8 @@ class DeploymentFencingTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactions;
     @Autowired TradingService mainService;
+    @Autowired com.misho.exchange.marketdata.MarketEvents events;
+    @Autowired tools.jackson.databind.ObjectMapper json;
     private final String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     private final String symbol = "FENCE" + suffix.toUpperCase();
     private Long userId;
@@ -52,7 +54,9 @@ class DeploymentFencingTest {
         var registry = spy(new MarketRegistry());
         var writer = new MarketWriter(jdbc, true);
         return new Node(new TradingService(stocks, users, orders, trades, loader, registry,
-                jdbc, transactions, candles, writer), writer, loader, registry);
+                jdbc, transactions, candles, writer, new RiskControls(jdbc, false),
+                new com.misho.exchange.observability.TradingMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                events, json), writer, loader, registry);
     }
 
     @BeforeEach

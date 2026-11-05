@@ -140,7 +140,7 @@ npm run build
 
 ## Trading workspace
 
-The local ticket includes a **Trade stock** selector synchronized with the local chart, quotes and book; it lists all registered local stocks. Administrators can add symbols using **Admin · Register local stock**. It shows **Local simulated exchange** bid/ask, paper cash and signed holdings. These balances are informational, not reserved buying power: short positions and negative cash remain possible. External market · IEX prices never determine local fills.
+The local ticket includes a **Trade stock** selector synchronized with the local chart, quotes and book; it lists all registered local stocks. Administrators can add symbols using **Admin · Register local stock**. It shows **Local simulated exchange** bid/ask, paper cash and signed holdings. The ticket shows available cash and shares after open-order reservations; new orders cannot borrow cash or short shares. External market · IEX prices never determine local fills.
 
 - Limit orders show an estimated quantity × limit value. Clicking a local bid/ask copies its exact price into the limit field without submitting or changing BUY/SELL.
 - Market tickets preview all opposite-side local price levels, including levels beyond the five displayed. Estimates include fillable quantity, unfilled remainder, notional, average/worst price and observation time. They refresh while the ticket is active; prices/liquidity can change before submission. The unfilled market remainder is cancelled.
@@ -161,7 +161,7 @@ Order actions are inserted in the same PostgreSQL transaction as order changes a
 
 - **Saved watchlists:** authenticated users can save up to 20 external instruments. Favorites persist in PostgreSQL and are private to that account. AAPL/TSLA remain starter cards when no favorites are saved.
 - **Price alerts:** choose the alert stock independently of the chart using the Alert stock dropdown (Apple/Tesla and watchlist entries) or Find alert stock provider search. Up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate only while the Markets page polls, and cannot reconstruct missed prices between samples. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. There is no background worker, email, or push delivery.
-- **Paper portfolio:** uses $100,000 virtual starting cash and replays committed local trades by trade ID. Signed holdings, average cost, realized/unrealized P/L, cash, and equity use local execution marks, never external Alpaca prices. It is an accounting view of existing matching, with no new cash/holding enforcement: negative cash and short positions are possible. Self-trades net to zero; cancelled/resting orders do not affect the portfolio. Historical replay grows with executed history; this is not a brokerage ledger.
+- **Paper portfolio:** uses $100,000 virtual starting cash and replays committed local trades and funded allocations chronologically. Holdings, average cost, realized/unrealized P/L, cash, and equity use local execution marks, never external Alpaca prices. Open orders reserve cash/shares, and admin demo allocations purchase initial shares at the local reference price. Self-trades net to zero; cancelled/resting orders do not affect the portfolio. Historical replay grows with executed history; this is not a brokerage ledger.
 - **Admin registration:** Local Exchange includes an ADMIN-only form for adding local stocks with a reference price. The existing server-side ADMIN and CSRF checks remain authoritative; registration does not create an externally listed security.
 
 Watchlists and alerts use Flyway **V8** (`exchange.watchlist`, `exchange.price_alerts`). Portfolio values are derived, so there is no separate balance table that can drift from executions.
@@ -224,11 +224,11 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 ## Important limits
 
 - **One active backend writer.** Global synchronization remains intentional; cached engines are not coordinated across instances.
-- A failed mutation may already have committed. On `TRADING_OUTCOME_UNCERTAIN` / `retrySafe: false`, inspect history before retrying. No request-idempotency keys yet.
+- A failed mutation may already have committed. On `TRADING_OUTCOME_UNCERTAIN` / `retrySafe: false`, inspect history before retrying. Use an Idempotency-Key to replay the original submission without creating another order.
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
 - No funded balances, settlement, or broker order routing. The paper portfolio is a derived simulation accounting view. External market data does not determine local sandbox fills.
-- Local development only for now. SSE, Docker deployment, and further production hardening remain planned.
+- Local development only for now. Local SSE invalidation and Docker deployment configuration are implemented; public hosting and further production hardening remain separate.
 
 ## Detailed guides
 
@@ -396,7 +396,7 @@ The React trading section requires login. Choose BUY/SELL, LIMIT/MARKET, and a p
 
 My Orders uses server-side pagination (25 per page) and status filters, including all stocks owned by the caller. It is refreshed manually or after that caller’s mutations; external fills appear on the next history refresh. Open and partially filled LIMIT rows expose amendment and cancellation; terminal orders have no controls. Amendment requires both a new price and a new **remaining** quantity. Invalid inputs receive focus with an associated inline error. Server amendment errors stay visible inside the dialog, and pending requests disable its close/save controls. No trading state is changed optimistically. Successful mutations reload history and request fresh snapshot/depth/trades/candles for the affected stock, queuing that refresh if a read is already in flight.
 
-Mutations are never automatically replayed. A lost response, unreadable success body, or uncertain server result displays a warning and pauses further mutations until the user checks My Orders and explicitly acknowledges that review. This browser safeguard is not an idempotency key and does not survive a page reload. Do not blindly resubmit after reloading either. Failed CSRF preparation sends no mutation. Account changes/sign-out are disabled while an order request is pending; `401` still clears the local session. Admins’ My Orders also shows only their own orders.
+Mutations are never automatically replayed. A lost response, unreadable success body, or uncertain server result displays a warning and pauses further mutations until the user checks My Orders and explicitly acknowledges that review. Submission keys and exact payloads persist per account in sessionStorage; an explicit same-key retry survives reloading the same tab. Amendment/cancellation still require history verification. Failed CSRF preparation sends no mutation. Account changes/sign-out are disabled while an order request is pending; `401` still clears the local session. Admins’ My Orders also shows only their own orders.
 
 
 An authenticated ADMIN can register a stock using JSON:
@@ -508,7 +508,7 @@ Unlike the engine's execution-sequence candle replay, this historical API uses t
 | `409` | Duplicate registration or amendment/cancellation of a terminal order |
 | `503` | Market/database unavailable, or uncertain trading outcome |
 
-A mutation failure can occur **after PostgreSQL committed**. The response then uses `TRADING_OUTCOME_UNCERTAIN` with `retrySafe: false`. Check your order history and relevant order before retrying; no automatic retry or request-idempotency key is implemented. A lost HTTP response can also hide a successful submission. If durable history cannot be read, wait for recovery rather than blindly resubmitting.
+A mutation failure can occur **after PostgreSQL committed**. The response then uses `TRADING_OUTCOME_UNCERTAIN` with `retrySafe: false`. Check your order history and relevant order before retrying; submissions with the same Idempotency-Key return their original result. Mutations are never automatically retried. A lost HTTP response can also hide a successful submission. If durable history cannot be read, wait for recovery rather than blindly resubmitting.
 
 </details>
 
@@ -626,7 +626,7 @@ The opt-in benchmark uses the test database, cleans only its own fixtures, and i
 
 It seeds 100/1,000/10,000 trades with twice as many historical filled orders, then measures resting submit, priority-losing amendment, cancellation, and executing market submit. Each size has five warmup cycles and ten measured cycles; setup, recovery, and cleanup are excluded. Run separately from other database workloads.
 
-Local medians on 2026-10-29, at **20,000 historical orders / 10,000 trades**:
+Local medians on 2026-10-29, at **20,000 historical orders / 10,000 trades** (before the later risk checks, idempotency and metrics additions):
 
 | Operation | Before delta persistence | After |
 | --- | ---: | ---: |
@@ -642,3 +642,7 @@ The baseline was commit `5dee98c` with the same benchmark fixture. Results demon
 ## Project history
 
 Extracted from [Java-Projects](https://github.com/xMisho/Java-Projects), preserving relevant Git history before Maven conversion. The original monorepo is archived. V3 builds on the existing matching core rather than duplicating it.
+
+API rate limits cover login, registration, trading, external market reads and other API reads. Responses include HTTP `429` and `Retry-After`; the dashboard honors read cooldowns and trading mutations are never automatically retried. See [deployment rate-limit details](docs/DEPLOYMENT.md#request-rate-limits) for budgets, configuration and single-instance limitations.
+
+See [Trading reliability and operations](docs/RELIABILITY.md) for idempotent submission keys, funded admin demo allocations, reservations, protected metrics, liveness/readiness, local SSE reconnect behavior and automated CI.

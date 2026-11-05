@@ -1,3 +1,5 @@
+import { PaperAllocation } from '../components/workspace/PaperAllocation'
+import { useMarketStream } from '../hooks/useMarketStream'
 import { useEffect, useState } from 'react'
 import { getStocks } from '../api/stocks'
 import { getMarketSnapshot } from '../api/marketData'
@@ -29,12 +31,15 @@ export function LocalExchange({ view, onShowOrders }: { view: 'local' | 'orders'
     }).catch(() => { if (!controller.signal.aborted) setError(true) })
     return () => controller.abort()
   }, [attempt])
+  const live = useMarketStream(view === 'local' ? symbol : null)
   const summary = useSymbolResource(view === 'local' ? symbol : null, getMarketSnapshot)
   const snapshot = summary.resource.status === 'ready' ? summary.resource.data : null
   const selected = stocks?.find(item => item.symbol === symbol)
   const chart = view === 'local' && symbol ? <CandleChart key={symbol} symbol={symbol} /> : null
   const book = view === 'local' && symbol ? <div className="lower-panels"><MarketDepth key={`depth:${symbol}`} symbol={symbol} /><RecentTrades key={`trades:${symbol}`} symbol={symbol} /></div> : null
   return <>
+    {view === 'local' && <PaperAllocation symbol={symbol} />}
+    {view === 'local' && <p className="panel-footnote" role="status">{live ? 'Live local updates connected · polling safety net active' : 'Polling active · live connection reconnects automatically'}</p>}
     <section hidden={view === 'hidden'} className="local-intro dashboard-intro">
       <p className="eyebrow">LOCAL EXCHANGE · SIMULATED MATCHING</p>
       <h1>{view === 'orders' ? 'Your local orders.' : 'Your trading workspace.'}</h1>

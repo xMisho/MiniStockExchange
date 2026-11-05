@@ -15,6 +15,11 @@ public class TradingExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", exception.getMessage()));
     }
 
+    @ExceptionHandler(TradingConflictException.class)
+    public ResponseEntity<Map<String, Object>> conflict(TradingConflictException exception) {
+        return ResponseEntity.status(409).body(Map.of("error", exception.getMessage(), "code", exception.code(), "retrySafe", true));
+    }
+
     @ExceptionHandler(OrderNotOpenException.class)
     public ResponseEntity<Map<String, Object>> notOpen() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Order is no longer open."));

@@ -3,8 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrderForm } from './OrderForm'
 import { OrderLifecycle } from './OrderLifecycle'
 import { MarketDepth } from '../MarketDepth'
-import { getOrderEvents, getOrderPreview } from '../../api/orders'
-import { getPortfolio } from '../../api/workspace'
+import { getOrderEvents, getOrderPreview, getTradingBalance } from '../../api/orders'
 import { getMarketDepth } from '../../api/marketData'
 import { useSymbolResource } from '../../hooks/useSymbolResource'
 import type { Order } from '../../types/orders'
@@ -15,7 +14,7 @@ const depth = { symbol: 'AAPL', bids: [{ price: 99.125, quantity: 4 }], asks: [{
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useSymbolResource).mockImplementation((_key, loader) => ({
-    resource: { status: 'ready', data: loader === getPortfolio ? { cash: 99480, positions: [{ symbol: 'AAPL', quantity: 6 }] } : loader === getMarketDepth ? depth : { bestBidPrice: 99.125, bestAskPrice: 100.25 } },
+    resource: { status: 'ready', data: loader === getTradingBalance ? { availableCash: 99480, availableShares: 6 } : loader === getMarketDepth ? depth : { bestBidPrice: 99.125, bestAskPrice: 100.25 } },
     retry: vi.fn(), updatedAt: Date.now(), refreshing: false, refreshError: false, errorMessage: null,
   }) as ReturnType<typeof useSymbolResource>)
   vi.mocked(getOrderPreview).mockResolvedValue({ requestedQuantity: 5, filledQuantity: 2, unfilledQuantity: 3, estimatedValue: 200.5, averagePrice: 100.25, worstPrice: 100.25, observedAt: '2026-11-03T10:00:00Z' })
@@ -30,14 +29,14 @@ it('copies book prices with four-decimal precision without submitting or changin
   expect(document.activeElement).toBe(screen.getByLabelText('Limit price'))
   expect(submit).not.toHaveBeenCalled()
 })
-it('shows cash, holdings, limit notional and explains balances are not reserved', () => {
+it('shows cash, holdings, limit notional and explains reserved availability', () => {
   render(<OrderForm symbol="AAPL" disabled={false} onSubmit={submit} />)
   fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '2' } })
   fireEvent.change(screen.getByLabelText('Limit price'), { target: { value: '100.25' } })
   expect(screen.getByText('$200.50')).toBeTruthy()
-  expect(screen.getByText(/Paper cash/).textContent).toContain('99,480.00')
-  expect(screen.getByText(/Paper cash/).textContent).toContain('Holdings 6')
-  expect(screen.getByText(/cash is not reserved/)).toBeTruthy()
+  expect(screen.getByText(/Available paper cash/).textContent).toContain('99,480.00')
+  expect(screen.getByText(/Available paper cash/).textContent).toContain('Available holdings 6')
+  expect(screen.getByText(/Open limit orders reserve cash or shares/)).toBeTruthy()
 })
 it('previews market liquidity and never submits automatically', async () => {
   render(<OrderForm symbol="AAPL" disabled={false} onSubmit={submit} />)

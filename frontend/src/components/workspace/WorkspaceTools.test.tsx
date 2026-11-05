@@ -46,9 +46,9 @@ it('registers a normalized local stock and reports backend conflicts', async () 
 it('shows virtual cash and local position accounting with clear limitations', async () => {
   vi.mocked(api.getPortfolio).mockResolvedValue({ startingCash: 100000, cash: 99480, equity: 100200, realizedPnl: 80, unrealizedPnl: 120, positions: [{ symbol: 'AAPL', quantity: 6, averagePrice: 100, markPrice: 120, marketValue: 720, realizedPnl: 80, unrealizedPnl: 120 }] })
   render(<PaperPortfolio active />)
-  expect(await screen.findByText('99,480.00')).toBeTruthy()
+  expect((await screen.findAllByText('99,480.00'))[0]).toBeTruthy()
   expect(screen.getByText('AAPL')).toBeTruthy()
-  expect(screen.getByText(/negative cash and short positions are possible/)).toBeTruthy()
+  expect(screen.getByText(/Open limit orders reserve cash or shares/)).toBeTruthy()
 })
 it('arms a sampled crossing alert and never automatically retries its creation', async () => {
   vi.mocked(api.getAlerts).mockResolvedValue({ alerts: [], warning: null })

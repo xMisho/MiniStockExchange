@@ -14,7 +14,7 @@ public class PortfolioService {
     public record Position(String symbol, long quantity, BigDecimal averagePrice, BigDecimal markPrice,
                            BigDecimal marketValue, BigDecimal unrealizedPnl, BigDecimal realizedPnl) { }
     public record Portfolio(BigDecimal startingCash, BigDecimal cash, BigDecimal equity,
-                            BigDecimal realizedPnl, BigDecimal unrealizedPnl, List<Position> positions) { }
+                            BigDecimal realizedPnl, BigDecimal unrealizedPnl, List<Position> positions, BigDecimal reservedCash, BigDecimal availableCash) { }
     private static final BigDecimal START = new BigDecimal("100000.00");
     private final JdbcTemplate jdbc;
     public PortfolioService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
@@ -39,10 +39,15 @@ public class PortfolioService {
         var holdings = new LinkedHashMap<String, Holding>();
         BigDecimal[] cash = { START };
         jdbc.query("""
-            SELECT t.stock_symbol, t.execution_price, t.quantity, b.user_id AS buyer, s.user_id AS seller,
-              (SELECT m.execution_price FROM exchange.trades m WHERE m.stock_symbol=t.stock_symbol ORDER BY m.id DESC LIMIT 1) AS mark
-            FROM exchange.trades t JOIN exchange.orders b ON b.id=t.buy_order_id JOIN exchange.orders s ON s.id=t.sell_order_id
-            WHERE b.user_id=? OR s.user_id=? ORDER BY t.id
+            SELECT e.*, COALESCE((SELECT m.execution_price FROM exchange.trades m WHERE m.stock_symbol=e.stock_symbol ORDER BY m.id DESC LIMIT 1),
+                (SELECT reference_price FROM exchange.stocks WHERE symbol=e.stock_symbol)) AS mark
+            FROM (
+              SELECT t.stock_symbol, t.execution_price, t.quantity, b.user_id AS buyer, s.user_id AS seller, t.executed_at AS happened, t.id, 1 AS source
+              FROM exchange.trades t JOIN exchange.orders b ON b.id=t.buy_order_id JOIN exchange.orders s ON s.id=t.sell_order_id
+              WHERE b.user_id=? OR s.user_id=?
+              UNION ALL
+              SELECT stock_symbol, price, quantity, user_id, 0, created_at, id, 0 FROM exchange.paper_allocations WHERE user_id=?
+            ) e ORDER BY happened, source, id
             """, row -> {
             var holding = holdings.computeIfAbsent(row.getString("stock_symbol"), ignored -> new Holding());
             holding.mark = row.getBigDecimal("mark");
@@ -51,7 +56,7 @@ public class PortfolioService {
             BigDecimal price = row.getBigDecimal("execution_price");
             holding.fill(delta, price);
             cash[0] = cash[0].subtract(price.multiply(BigDecimal.valueOf(delta)));
-        }, user, user);
+        }, user, user, user);
         var positions = new ArrayList<Position>();
         BigDecimal realized = BigDecimal.ZERO, unrealized = BigDecimal.ZERO, value = BigDecimal.ZERO;
         for (var entry : holdings.entrySet()) {
@@ -61,6 +66,7 @@ public class PortfolioService {
             realized = realized.add(h.realized); unrealized = unrealized.add(pnl); value = value.add(mv);
             positions.add(new Position(entry.getKey(), h.quantity, h.average, h.mark, mv, pnl, h.realized));
         }
-        return new Portfolio(START, cash[0], cash[0].add(value), realized, unrealized, List.copyOf(positions));
+        BigDecimal reserved = jdbc.queryForObject("SELECT COALESCE(SUM(limit_price * remaining_quantity),0) FROM exchange.orders WHERE user_id=? AND side='BUY' AND order_type='LIMIT' AND status IN ('OPEN','PARTIALLY_FILLED')", BigDecimal.class, user);
+        return new Portfolio(START, cash[0], cash[0].add(value), realized, unrealized, List.copyOf(positions), reserved, cash[0].subtract(reserved));
     }
 }

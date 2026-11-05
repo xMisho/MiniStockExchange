@@ -23,14 +23,23 @@ export function TradingWorkspace({ symbol, stocks, onSymbolChange, view = 'local
   const auth = useAuth()
   if (auth.status === 'loading') return <section hidden={view === 'hidden'} className="data-panel" id="trading"><p className="panel-message">Checking your session before enabling trading…</p></section>
   if (!auth.user) return <section hidden={view === 'hidden'} className="data-panel" id="trading"><h2 id="my-orders">Trade in your exchange</h2><p className="panel-message">Sign in using the header to place orders and manage My Orders. Public market data remains available.</p></section>
-  return <AuthenticatedTrading key={auth.user.id} symbol={symbol} stocks={stocks} onSymbolChange={onSymbolChange} view={view} chart={chart} book={book} onShowOrders={onShowOrders} authBusy={auth.busy} holdSession={auth.holdSession} />
+  return <AuthenticatedTrading key={auth.user.id} symbol={symbol} stocks={stocks} onSymbolChange={onSymbolChange} view={view} chart={chart} book={book} onShowOrders={onShowOrders} accountId={auth.user.id} authBusy={auth.busy} holdSession={auth.holdSession} />
 }
-function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders, authBusy, holdSession }: WorkspaceProps & { authBusy: boolean; holdSession: () => () => void }) {
+function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', chart, book, onShowOrders, authBusy, holdSession, accountId }: WorkspaceProps & { accountId: number; authBusy: boolean; holdSession: () => () => void }) {
   const [busy, setBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const noticeElement = useRef<HTMLDivElement>(null)
-  const [blocked, setBlocked] = useState(false)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const storageKey = `verdex:pending-order:${accountId}`
+  type Pending = { symbol: string; order: SubmitOrder; key: string }
+  const [pendingSubmission, setPendingSubmission] = useState<Pending | null>(() => {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null') as Pending | null
+      return value && typeof value.key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(value.key)
+        && typeof value.symbol === 'string' && value.order && typeof value.order.quantity === 'number' ? value : null
+    } catch { return null }
+  })
+  const [blocked, setBlocked] = useState(() => sessionStorage.getItem(storageKey) !== null)
+  const [notice, setNotice] = useState<Notice | null>(() => sessionStorage.getItem(storageKey) ? { kind: 'uncertain', message: 'A previous submission needs confirmation. Retry the same request key or review My Orders.' } : null)
   const [page, setPage] = useState(0)
   const [status, setStatus] = useState<OrderStatus | ''>('')
   const [revision, setRevision] = useState(0)
@@ -48,8 +57,8 @@ function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', 
     return () => clearTimeout(timer)
   }, [notice])
   const refreshOrders = () => setRevision((value) => value + 1)
-  const perform = async (targetSymbol: string, action: () => Promise<string>, submission = false) => {
-    if (inFlight.current || blocked || authBusy) return false
+  const perform = async (targetSymbol: string, action: () => Promise<string>, submission = false, replay = false) => {
+    if (inFlight.current || (blocked && !replay) || authBusy) return false
     inFlight.current = true; setBusy(true); setSubmitting(submission); setNotice(null)
     const release = holdSession()
     try {
@@ -71,10 +80,22 @@ function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', 
       return false
     } finally { release(); inFlight.current = false; if (mounted.current) { setBusy(false); setSubmitting(false) } }
   }
-  const submit = (targetSymbol: string, order: SubmitOrder) => perform(targetSymbol, async () => {
-    const result = await submitOrder(targetSymbol, order)
-    return `Order #${result.id} · ${result.symbol} · ${result.status.replace('_', ' ')}. Filled ${result.filledQuantity}; remaining ${result.remainingQuantity}.`
-  }, true)
+  const sendSubmission = (pending: Pending, replay = false) => perform(pending.symbol, async () => {
+    try {
+      const result = await submitOrder(pending.symbol, pending.order, pending.key)
+      sessionStorage.removeItem(storageKey); setPendingSubmission(null); setBlocked(false)
+      return `Order #${result.id} · ${result.symbol} · ${result.status.replace('_', ' ')}. Filled ${result.filledQuantity}; remaining ${result.remainingQuantity}.`
+    } catch (error) {
+      if (!(error instanceof OrderRequestError && error.uncertain)) { sessionStorage.removeItem(storageKey); setPendingSubmission(null) }
+      throw error
+    }
+  }, true, replay)
+  const submit = (targetSymbol: string, order: SubmitOrder) => {
+    if (inFlight.current || blocked || authBusy) return Promise.resolve(false)
+    const pending = { symbol: targetSymbol, order, key: crypto.randomUUID() }
+    sessionStorage.setItem(storageKey, JSON.stringify(pending)); setPendingSubmission(pending)
+    return sendSubmission(pending)
+  }
   const amend = (order: Order, price: string, remaining: string) => perform(order.symbol, async () => {
     await amendOrder(order.id, price, remaining)
     return `Amendment confirmed for order #${order.id} · ${order.symbol}. My Orders is refreshing with the resulting state.`
@@ -89,9 +110,10 @@ function AuthenticatedTrading({ symbol, stocks, onSymbolChange, view = 'local', 
       <p>{notice.message}</p>
       {notice.kind === 'success' && <button type="button" className="text-button" aria-label="Dismiss notification" onClick={() => setNotice(null)}>Dismiss</button>}
       {notice.kind === 'uncertain' && <>
+        {pendingSubmission && <button type="button" className="text-button" disabled={busy} onClick={() => { void sendSubmission(pendingSubmission, true) }}>Retry same submission safely</button>}
         <p><strong>Do not resubmit blindly.</strong> The request may already have committed. Check My Orders, including filled and cancelled orders, before deciding whether to try again. Mutations are paused until you confirm that review.</p>
         <div className="notice-actions"><button type="button" className="text-button" onClick={() => { setPage(0); setStatus(''); refreshOrders(); document.getElementById('my-orders-title')?.focus(); onShowOrders?.(); requestAnimationFrame(() => document.getElementById('my-orders-title')?.focus()) }}>Check My Orders</button>
-        <button type="button" className="text-button" onClick={() => { setBlocked(false); setNotice(null) }}>I have checked My Orders</button></div>
+        <button type="button" className="text-button" onClick={() => { sessionStorage.removeItem(storageKey); setPendingSubmission(null); setBlocked(false); setNotice(null) }}>I have checked My Orders</button></div>
       </>}
     </div>
   return <div className="trading-workspace" id="trading">

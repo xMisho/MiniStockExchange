@@ -1,12 +1,16 @@
+import { rateLimitedFetch } from './rateLimit'
 export async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
   const timeout = AbortSignal.timeout(8_000)
-  const response = await fetch(path, {
+  const response = await rateLimitedFetch(path, {
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   })
 
-  if (!response.ok) throw new Error(`Market request failed (${response.status}).`)
+  if (!response.ok) {
+    if (response.status === 429) throw new Error(`Too many requests. Wait ${response.headers.get('Retry-After') ?? 'a few'} seconds before trying again.`)
+    throw new Error(`Market request failed (${response.status}).`)
+  }
   return response.json()
 }
 

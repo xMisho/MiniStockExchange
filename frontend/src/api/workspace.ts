@@ -1,15 +1,16 @@
+import { rateLimitedFetch } from './rateLimit'
 import { authenticatedRequest, csrfRequest } from './auth'
 import { isFiniteNumber, isRecord } from './client'
 import type { Instrument, ExternalResponse } from '../types/externalMarket'
 export interface Alert { id: number; symbol: string; direction: 'ABOVE' | 'BELOW'; target: number; triggeredAt: string | null; triggeredPrice: number | null; lastObservedAt: string | null }
 export interface AlertList { alerts: Alert[]; warning: string | null; newlyTriggeredIds?: number[] }
 export interface Position { symbol: string; quantity: number; averagePrice: number; markPrice: number; marketValue: number; unrealizedPnl: number; realizedPnl: number }
-export interface Portfolio { startingCash: number; cash: number; equity: number; realizedPnl: number; unrealizedPnl: number; positions: Position[] }
+export interface Portfolio { reservedCash?: number; availableCash?: number; startingCash: number; cash: number; equity: number; realizedPnl: number; unrealizedPnl: number; positions: Position[] }
 export interface Session { status: 'REGULAR' | 'PRE_MARKET' | 'AFTER_HOURS' | 'CLOSED'; asOf: string; nextOpen: string; nextClose: string; regularOpen: string | null; regularClose: string | null; timezone: string }
 const instant = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v))
 export const isInstrument = (v: unknown): v is Instrument => isRecord(v) && typeof v.symbol === 'string' && /^[A-Z][A-Z0-9.-]{0,14}$/.test(v.symbol) && typeof v.companyName === 'string' && v.currency === 'USD'
 async function publicRead(path: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]), credentials: 'same-origin' })
+  const response = await rateLimitedFetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]), credentials: 'same-origin' })
   const value: unknown = await response.json()
   if (!response.ok) throw new Error(isRecord(value) && typeof value.error === 'string' ? value.error : 'Market lookup unavailable.')
   return value
