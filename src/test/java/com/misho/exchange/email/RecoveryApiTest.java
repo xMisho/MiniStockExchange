@@ -52,7 +52,7 @@ class RecoveryApiTest {
     UUID job(){return jdbc.queryForObject("SELECT id FROM exchange.email_outbox WHERE user_id=? ORDER BY created_at DESC LIMIT 1",UUID.class,id);}
     void forgot()throws Exception{assertEquals(202,client().postJson("/api/auth/forgot-password",body(Map.of("email",email))).statusCode());}
     @Test void genericResponsesCooldownAndEncryptedStorage()throws Exception{
-        var browser=client();var known=browser.postJson("/api/auth/forgot-password",body(Map.of("email"," "+email.toUpperCase()+" ")));
+        var browser=client();assertTrue(json.readTree(browser.get("/api/auth/capabilities").body()).get("passwordRecovery").asBoolean());var known=browser.postJson("/api/auth/forgot-password",body(Map.of("email"," "+email.toUpperCase()+" ")));
         var unknown=browser.postJson("/api/auth/forgot-password",body(Map.of("email","missing_"+email)));
         assertEquals(202,known.statusCode());assertEquals(known.body(),unknown.body());
         forgot();assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM exchange.email_tokens WHERE user_id=?",Integer.class,id));

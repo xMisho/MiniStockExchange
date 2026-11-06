@@ -11,6 +11,7 @@ let expired: () => void
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(api.getCurrentUser).mockResolvedValue(null)
+  vi.mocked(api.getAuthCapabilities).mockResolvedValue({ passwordRecovery: true })
   vi.mocked(api.refreshCsrf).mockResolvedValue({ token: 'fresh', headerName: 'X-CSRF-TOKEN' })
   vi.mocked(api.onSessionExpired).mockImplementation((listener) => { expired = listener; return () => {} })
   vi.mocked(api.login).mockResolvedValue(user)
@@ -206,4 +207,18 @@ it('accepts an email address in the shared sign-in field', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to account' }))
   await waitFor(() => expect(api.login).toHaveBeenCalledWith('example@example.test', 'ExamplePassword123!', false))
   expect(await screen.findByText('example')).toBeTruthy()
+})
+
+
+it('clearly disables password recovery when email is unavailable in the deployment', async () => {
+  vi.mocked(api.getAuthCapabilities).mockResolvedValue({ passwordRecovery: false })
+  show(); await openLogin()
+  expect(await screen.findByText('Email password recovery is unavailable on this demo.')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Forgot password?' })).toBeNull()
+  expect(api.forgotPassword).not.toHaveBeenCalled()
+})
+it('does not enable recovery while its availability cannot be checked', async () => {
+  vi.mocked(api.getAuthCapabilities).mockRejectedValue(new Error('offline'))
+  show(); await openLogin()
+  expect(screen.getByRole('button', { name: 'Forgot password?' })).toHaveProperty('disabled', true)
 })

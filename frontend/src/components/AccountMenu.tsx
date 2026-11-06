@@ -1,11 +1,17 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/authState'
-import { register, forgotPassword } from '../api/auth'
+import { register, forgotPassword, getAuthCapabilities } from '../api/auth'
 import { Modal } from './Modal'
 
 export function AccountMenu() {
   const auth = useAuth()
+  const [recoveryAvailable, setRecoveryAvailable] = useState<boolean | 'loading' | 'error'>('loading')
+  useEffect(() => {
+    const controller = new AbortController()
+    void getAuthCapabilities(controller.signal).then(value => { if (!controller.signal.aborted) setRecoveryAvailable(value.passwordRecovery) }).catch(() => { if (!controller.signal.aborted) setRecoveryAvailable('error') })
+    return () => controller.abort()
+  }, [])
   const [mode, setMode] = useState<'login' | 'register' | 'forgot' | null>(null)
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -22,6 +28,7 @@ export function AccountMenu() {
     setPending(true); setError(null); setMessage(null)
     try {
       if (mode === 'forgot') {
+        if (recoveryAvailable !== true) { setError('Email password recovery is unavailable on this demo.'); return }
         await forgotPassword(email); setMessage('If an account matches that address, a password-reset email will be sent. Check your inbox and spam folder.')
       } else if (mode === 'register') {
         await register(username, email, password)
@@ -50,7 +57,8 @@ export function AccountMenu() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{showPassword && <path d="m3 3 18 18" />}</svg>
           </button>
         </div></div>}
-        {mode === 'login' && <button type="button" className="text-button" disabled={pending || auth.busy} onClick={() => changeMode('forgot')}>Forgot password?</button>}
+        {mode === 'login' && (recoveryAvailable === false ? <p className="panel-footnote">Email password recovery is unavailable on this demo.</p> : <button type="button" className="text-button" disabled={pending || auth.busy || recoveryAvailable !== true} onClick={() => changeMode('forgot')}>Forgot password?</button>)}
+        {mode === 'login' && recoveryAvailable === 'error' && <p className="panel-footnote">Couldn’t check password recovery availability. Refresh to retry.</p>}
         {mode === 'forgot' && <button type="button" className="text-button" disabled={pending} onClick={() => changeMode('login')}>Back to sign in</button>}
         {mode === 'login' && <label className="remember-choice"><input type="checkbox" checked={rememberMe} disabled={pending || auth.busy} onChange={event => setRememberMe(event.target.checked)} /><span>Remember me for 14 days<small>Use only on a device you trust.</small></span></label>}
         {mode === 'register' && <p className="panel-footnote">Use 15–128 characters. Registration creates a regular user account.</p>}

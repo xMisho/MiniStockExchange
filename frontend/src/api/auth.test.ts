@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { getCurrentUser, login, logout, register, csrfRequest, onSessionExpired } from './auth'
+import { getCurrentUser, login, logout, register, csrfRequest, onSessionExpired, getAuthCapabilities } from './auth'
 const user = { id: 1, username: 'example', email: 'example@example.test', role: 'USER' }
 const token = { token: 'fresh-token', headerName: 'X-CSRF-TOKEN' }
 function response(body: unknown, status = 200) { return new Response(status === 204 ? null : JSON.stringify(body), { status }) }
@@ -58,4 +58,12 @@ it('only sends remember-me when explicitly selected', async () => {
   expect(new URLSearchParams(fetcher.mock.calls[1][1].body).has('remember-me')).toBe(false)
   await login('example', 'password', true)
   expect(new URLSearchParams(fetcher.mock.calls[3][1].body).get('remember-me')).toBe('true')
+})
+
+
+it('reads public recovery availability and rejects invalid capability responses', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ passwordRecovery: false })))
+  expect(await getAuthCapabilities()).toEqual({ passwordRecovery: false })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ passwordRecovery: 'true' })))
+  await expect(getAuthCapabilities()).rejects.toThrow('availability')
 })

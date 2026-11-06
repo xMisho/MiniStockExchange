@@ -15,12 +15,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthController {
 
     private final UserService users;
+    private final com.misho.exchange.email.EmailConfiguration email;
 
-    public AuthController(UserService users) {
+    public AuthController(UserService users, com.misho.exchange.email.EmailConfiguration email) {
         this.users = users;
+        this.email = email;
     }
 
     public record CsrfResponse(String token, String headerName, String parameterName) { }
+
+    public record Capabilities(boolean passwordRecovery) { }
+
+    @GetMapping("/capabilities")
+    public Capabilities capabilities() { return new Capabilities(email.enabled); }
 
     @GetMapping("/csrf")
     public CsrfResponse csrf(CsrfToken token) {

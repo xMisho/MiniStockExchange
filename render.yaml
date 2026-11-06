@@ -15,6 +15,9 @@ services:
         value: production
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      # Public demo stays free: no custom email domain or provider keys required.
+      - key: EMAIL_ENABLED
+        value: "false"
       - key: DB_URL
         sync: false
       - key: DB_USERNAME

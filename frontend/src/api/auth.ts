@@ -79,3 +79,9 @@ export async function requestEmailVerification() { await csrfRequest('/api/auth/
 export async function setAlertEmails(alertEmails: boolean) {
   await csrfRequest('/api/auth/email-preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alertEmails }) })
 }
+
+export async function getAuthCapabilities(signal?: AbortSignal): Promise<{ passwordRecovery: boolean }> {
+  const value: unknown = await (await request('/api/auth/capabilities', { signal })).json()
+  if (!isRecord(value) || typeof value.passwordRecovery !== 'boolean') throw new Error('Couldn’t check password-recovery availability.')
+  return { passwordRecovery: value.passwordRecovery }
+}

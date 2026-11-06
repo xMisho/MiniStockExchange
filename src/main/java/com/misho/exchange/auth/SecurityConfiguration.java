@@ -21,7 +21,7 @@ public class SecurityConfiguration {
         http.authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/assets/**", "/THIRD_PARTY_NOTICES.md", "/api/ready", "/api/live", "/api/health", "/api/events", "/api/stocks", "/api/stocks/*",
-                                "/api/auth/csrf", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
+                                "/api/auth/csrf", "/api/auth/capabilities", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks", "/api/admin/paper-allocations").hasRole("ADMIN")
                         .requestMatchers("/api/auth/email-preferences", "/api/auth/email-verification").authenticated()

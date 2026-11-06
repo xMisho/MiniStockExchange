@@ -78,6 +78,14 @@ The first website can run with **no Alpaca credentials**. Markets shows its conn
 
 Before displaying provider data publicly, verify your Alpaca account's current display/redistribution permissions. A personal API key or free IEX access does not itself establish public redistribution permission. Only after that verification, add `ALPACA_API_KEY` and `ALPACA_API_SECRET` privately in Render's Environment tab and deploy/restart. Rotate any keys previously exposed in screenshots before uploading them. No provider keys are sent to the frontend or baked into the image.
 
+## Email for the free launch
+
+The Blueprint sets `EMAIL_ENABLED=false`. Do not upload the local Resend test key, encryption key, or sandbox recipient setting to this public deployment. Local development can continue testing email privately. Password recovery is shown as unavailable in the public sign-in dialog, and email notification controls explain that delivery is disabled. Registration/login and in-app alerts continue working; there is no automatic password-recovery channel for public accounts in this mode.
+
+`GET /api/auth/capabilities` exposes only a public boolean indicating password-recovery availability. It does not reveal keys or account details. A failed capabilities request leaves the recovery button disabled rather than implying it can send.
+
+To enable public email later, configure a verified sender domain, use a restricted sending key and stable encryption key, set the correct HTTPS `APP_PUBLIC_URL`, then deliberately enable `EMAIL_ENABLED`. See [email setup](EMAIL.md). A Render website address is sufficient for the app itself and requires no purchased domain.
+
 ## 4. First account and local stocks
 
 Register a new user through the hosted UI. In Neon's SQL Editor, promote only your own normalized username:

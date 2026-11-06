@@ -43,7 +43,7 @@ it('submits a limit order once and shows the backend-confirmed ID and status', a
   expect(await screen.findByText(/Order #12 · AAPL · OPEN/)).toBeTruthy()
   expect(submitOrder).toHaveBeenCalledWith('AAPL', { side: 'BUY', type: 'LIMIT', quantity: 5, limitPrice: '100.2500' }, expect.any(String))
   expect(refreshMarket).toHaveBeenCalledWith('AAPL')
-  expect(getMyOrders).toHaveBeenCalledTimes(2)
+  await waitFor(() => expect(getMyOrders).toHaveBeenCalledTimes(2))
   expect(auth.holdSession).toHaveBeenCalledOnce()
   expect(release).toHaveBeenCalledOnce()
 })

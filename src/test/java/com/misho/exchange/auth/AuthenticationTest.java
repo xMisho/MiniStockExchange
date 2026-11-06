@@ -122,6 +122,7 @@ class AuthenticationTest {
     @Test
     void unconfiguredEmailDoesNotPretendToSendRecovery() throws Exception {
         var browser=client();
+        assertFalse(json.readTree(browser.get("/api/auth/capabilities").body()).get("passwordRecovery").asBoolean());
         var response=browser.postJson("/api/auth/forgot-password", "{\"email\":\"nobody@example.test\"}");
         assertEquals(503,response.statusCode());
         assertTrue(response.body().contains("Email delivery is not configured"));
