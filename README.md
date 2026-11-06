@@ -4,7 +4,7 @@
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** React dashboard with searchable external stock quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Symbol search, saved watchlists, in-app alerts, a local paper portfolio, admin stock registration, and a market-session indicator are implemented. Live push updates and deployment are next.
+**Current state:** React dashboard with searchable external stock quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Symbol search, saved watchlists, in-app alerts, a local paper portfolio, admin stock registration, and a market-session indicator are implemented. External-price paper trading is available locally for review; see [paper trading](docs/PAPER_TRADING.md).
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 

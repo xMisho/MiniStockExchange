@@ -6,7 +6,7 @@ import { formatCount, formatPrice, formatUtcDateTime } from '../utils/format'
 import { CandlestickCanvas } from './CandlestickCanvas'
 import { VolumeChart } from './VolumeChart'
 
-export function ExternalPriceChart({ symbol }: { symbol: string }) {
+export function ExternalPriceChart({ symbol, executions = [] }: { symbol: string; executions?: import('../paper/api').PaperOrder[] }) {
   const [range, setRange] = useState<HistoryRange>('1D')
   const [mode, setMode] = useState<'candles' | 'line'>('candles')
   const [renderError, setRenderError] = useState(false)
@@ -21,7 +21,7 @@ export function ExternalPriceChart({ symbol }: { symbol: string }) {
     {!candles ? <div className="panel-message" role={resource.status === 'error' ? 'alert' : 'status'}><p>{resource.status === 'error' ? errorMessage ?? 'External charts are unavailable.' : 'Loading market history…'}</p>{resource.status === 'error' && <button className="primary-button" type="button" onClick={retry}>Retry market history</button>}</div>
       : candles.length === 0 ? <p className="panel-message">No provider bars are available for this period.</p> : <>
         {range === '1D' && candles.length < 10 && <p className="source-warning">Limited session data: {candles.length} reported bars so far. The 15-minute history cutoff and sparse IEX activity can leave gaps.</p>}
-        {renderError ? <div role="alert" className="panel-message">Chart unavailable. Exact provider bars are in the table below. <button type="button" className="text-button" onClick={() => setRenderError(false)}>Retry chart</button></div> : <CandlestickCanvas key={`${symbol}:${range}:${mode}`} symbol={symbol} mode={mode} candles={candles} onError={failed} />}
+        {renderError ? <div role="alert" className="panel-message">Chart unavailable. Exact provider bars are in the table below. <button type="button" className="text-button" onClick={() => setRenderError(false)}>Retry chart</button></div> : <CandlestickCanvas key={`${symbol}:${range}:${mode}`} symbol={symbol} mode={mode} candles={candles} onError={failed} markers={executions.flatMap(order => { if (!order.executedAt) return []; const time=Date.parse(order.executedAt); const candle=candles.find((bar,index) => time>=Date.parse(bar.startTime) && time<Date.parse(bar.startTime)+(range==='1D'?60000:range==='1M'?3600000:86400000) && (index===candles.length-1 || time<Date.parse(candles[index+1].startTime))); return candle ? [{time:candle.startTime,side:order.side,text:`${order.side} #${order.id} · ${order.quantity}`}]:[] })} />}
         <VolumeChart candles={candles} symbol={symbol} />
         <details className="candle-data"><summary>View provider bars</summary><div className="table-scroll"><table className="market-table"><thead><tr>{['Time (UTC)', 'Open', 'High', 'Low', 'Close', 'IEX volume', 'IEX trades'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{candles.map(bar => <tr key={bar.startTime}><td>{formatUtcDateTime(bar.startTime)}</td><td>{formatPrice(bar.open)}</td><td>{formatPrice(bar.high)}</td><td>{formatPrice(bar.low)}</td><td>{formatPrice(bar.close)}</td><td>{new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(bar.volume)}</td><td>{bar.tradeCount === null ? '—' : formatCount(bar.tradeCount)}</td></tr>)}</tbody></table></div></details>
       </>}

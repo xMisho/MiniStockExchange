@@ -378,3 +378,14 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .email-preferences { border-top: 1px solid var(--border, #d7e1d8); margin-top: 1.5rem; padding-top: 1rem; }
 .email-preferences h3 { font-size: 1rem; margin: 0 0 .75rem; }
 .email-preferences p { margin: .75rem 0; }
+
+/* External paper execution workspace */
+.paper-trading-grid { display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(320px, 1fr); gap:24px; margin:24px 0; align-items:start; }
+.paper-trading-grid > * { min-width:0; }
+.paper-trading-grid fieldset { border:0; padding:0; margin:0; }
+@media(max-width:850px) { .paper-trading-grid { grid-template-columns:minmax(0,1fr); } }
+
+/* Override the Markets-page chart placement inside the paper workspace. */
+.paper-trading-grid > .candle-panel { grid-column: auto; }
+.paper-trading-grid .trading-form fieldset { display: grid; gap: 18px; }
+.paper-trading-grid .trading-form .primary-button { width: 100%; min-height: 46px; }

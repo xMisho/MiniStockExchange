@@ -31,8 +31,8 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         } else {
             var auth = SecurityContextHolder.getContext().getAuthentication();
             boolean authenticated = auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
-            if (authenticated && ((method.equals("POST") && path.matches("/api/stocks/[^/]+/orders"))
-                    || ((method.equals("PATCH") || method.equals("DELETE")) && path.matches("/api/orders/[^/]+")))) {
+            if (authenticated && ((method.equals("POST") && (path.matches("/api/stocks/[^/]+/orders") || path.equals("/api/paper/orders")))
+                    || ((method.equals("PATCH") || method.equals("DELETE")) && (path.matches("/api/orders/[^/]+") || path.matches("/api/paper/orders/[^/]+"))))) {
                 policy = RequestLimits.Policy.TRADING;
                 identity = auth.getName();
             } else if (method.equals("GET") && path.startsWith("/api/market/")) policy = RequestLimits.Policy.EXTERNAL;

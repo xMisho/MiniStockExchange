@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { EmailPreferences } from './EmailPreferences'
 import { createPortal } from 'react-dom'
 import { createAlert, getAlerts, removeAlert } from '../../api/workspace'
 import { useAuth } from '../../auth/authState'
@@ -57,6 +56,6 @@ export function PriceAlerts({ symbol, instruments = [] }: { symbol: string; inst
       {data?.alerts.length === 0 && <p className="panel-message">No alerts yet.</p>}
       <ul className="alert-list">{data?.alerts.map(alert => <li key={alert.id}><div><span className={`alert-badge ${alert.triggeredAt ? 'triggered' : 'armed'}`}>{alert.triggeredAt ? 'Triggered' : 'Armed'}</span><strong>{alert.symbol} {alert.direction.toLowerCase()} {formatPrice(alert.target)}</strong><p>{alert.triggeredAt ? `Triggered at ${formatPrice(alert.triggeredPrice)} · ${formatUtcDateTime(alert.triggeredAt)}` : `Armed · Last observed ${alert.lastObservedAt ? formatUtcDateTime(alert.lastObservedAt) : 'not yet'}`}</p></div><button className="text-button" disabled={busy || auth.busy} onClick={() => { void change(() => removeAlert(alert.id)) }} aria-label={`Delete alert ${alert.id}`}>Delete</button></li>)}</ul>
     </>}
-    <EmailPreferences key={auth.user?.id ?? 'anonymous'} /><p className="panel-footnote">Alerts start from the price observed when armed; they do not fire merely because a threshold was already passed. Prices between samples can be missed. Verified users can opt into email notifications above.</p>
+
   </section>{notification && (feedback ? createPortal(notification, feedback) : notification)}</>
 }

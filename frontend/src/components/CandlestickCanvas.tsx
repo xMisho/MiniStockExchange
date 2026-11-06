@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { CandlestickSeries, LineSeries, ColorType, createChart } from 'lightweight-charts'
-import type { IChartApi, ISeriesApi, Time, UTCTimestamp } from 'lightweight-charts'
+import { CandlestickSeries, LineSeries, ColorType, createChart, createSeriesMarkers } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time, UTCTimestamp, ISeriesMarkersPluginApi } from 'lightweight-charts'
 import type { ChartCandle } from '../types/market'
 import { formatUtcDateTime } from '../utils/format'
 
-interface Props { candles: ChartCandle[]; symbol: string; mode?: 'candles' | 'line'; onError: () => void }
+interface Props { candles: ChartCandle[]; symbol: string; mode?: 'candles' | 'line'; onError: () => void; markers?: {time:string;side:'BUY'|'SELL';text:string}[] }
 
-export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }: Props) {
+export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError, markers = [] }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null>(null)
+  const markerRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
   const fittedSymbol = useRef<string | null>(null)
 
   useEffect(() => {
@@ -32,10 +33,11 @@ export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }
       seriesRef.current = mode === 'line'
         ? chart.addSeries(LineSeries, { color: '#28734e', lineWidth: 2, crosshairMarkerVisible: true })
         : chart.addSeries(CandlestickSeries, { upColor: '#28734e', downColor: '#a34545', borderVisible: false, wickUpColor: '#28734e', wickDownColor: '#a34545' })
+      markerRef.current = createSeriesMarkers(seriesRef.current, [])
     } catch {
       onError()
     }
-    return () => { chart?.remove(); chartRef.current = null; seriesRef.current = null; fittedSymbol.current = null }
+    return () => { markerRef.current?.detach(); markerRef.current = null; chart?.remove(); chartRef.current = null; seriesRef.current = null; fittedSymbol.current = null }
   }, [onError, mode])
 
   useEffect(() => {
@@ -45,12 +47,13 @@ export function CandlestickCanvas({ candles, symbol, mode = 'candles', onError }
         time: Math.floor(Date.parse(candle.startTime) / 1000) as UTCTimestamp,
         ...(mode === 'line' ? { value: candle.close } : { open: candle.open, high: candle.high, low: candle.low, close: candle.close }),
       })))
+      markerRef.current?.setMarkers(markers.map(m => ({ time: Math.floor(Date.parse(m.time)/1000) as UTCTimestamp, position: m.side==='BUY' ? 'belowBar' as const : 'aboveBar' as const, color: m.side==='BUY'?'#28734e':'#a34545', shape:m.side==='BUY'?'arrowUp' as const:'arrowDown' as const,text:m.text })).sort((a,b)=>Number(a.time)-Number(b.time)))
       if (fittedSymbol.current !== symbol) {
         chartRef.current.timeScale().fitContent()
         fittedSymbol.current = symbol
       }
     } catch { onError() }
-  }, [candles, symbol, onError, mode])
+  }, [candles, symbol, onError, mode, markers])
 
   const zoom = (factor: number) => {
     const scale = chartRef.current?.timeScale()

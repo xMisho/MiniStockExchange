@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CandlestickCanvas } from './CandlestickCanvas'
 
-const mocks = vi.hoisted(() => ({ setData: vi.fn(), remove: vi.fn(), fitContent: vi.fn(), setRange: vi.fn(), create: vi.fn() }))
-vi.mock('lightweight-charts', () => ({ CandlestickSeries: {}, LineSeries: {}, ColorType: { Solid: 'solid' }, createChart: mocks.create }))
+const mocks = vi.hoisted(() => ({ setData: vi.fn(), remove: vi.fn(), fitContent: vi.fn(), setRange: vi.fn(), create: vi.fn(), markers: vi.fn(), detach: vi.fn() }))
+vi.mock('lightweight-charts', () => ({ CandlestickSeries: {}, LineSeries: {}, ColorType: { Solid: 'solid' }, createChart: mocks.create, createSeriesMarkers: () => ({setMarkers:mocks.markers,detach:mocks.detach}) }))
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 const candles = [{ startTime: '2026-10-31T14:32:00Z', open: 100, high: 105, low: 99, close: 102, volume: 20, tradeCount: 3 }]
 it('maps OHLC to epoch seconds, sizes responsively and removes the chart on unmount', () => {
@@ -62,4 +62,11 @@ it('zooms deliberately around the visible center and resets the view', () => {
   expect((range.from + range.to) / 2).toBeCloseTo(4)
   fireEvent.click(screen.getByRole('button', { name: 'Reset view' }))
   expect(mocks.fitContent).toHaveBeenCalledTimes(2)
+})
+
+it('shows sorted BUY and SELL execution markers and detaches them on unmount', () => {
+ mocks.create.mockReturnValue({addSeries:()=>({setData:mocks.setData}),timeScale:()=>({fitContent:mocks.fitContent}),remove:mocks.remove})
+ const view=render(<CandlestickCanvas symbol="AAPL" candles={candles} onError={vi.fn()} markers={[{time:candles[0].startTime,side:'BUY',text:'BUY #1'}]}/>)
+ expect(mocks.markers).toHaveBeenCalledWith([expect.objectContaining({shape:'arrowUp',position:'belowBar',text:'BUY #1'})])
+ view.unmount();expect(mocks.detach).toHaveBeenCalledOnce()
 })

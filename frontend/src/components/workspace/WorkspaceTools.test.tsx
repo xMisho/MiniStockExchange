@@ -58,7 +58,7 @@ it('arms a sampled crossing alert and never automatically retries its creation',
   fireEvent.click(screen.getByRole('button', { name: 'Create alert' }))
   await waitFor(() => expect(api.createAlert).toHaveBeenCalledWith('AAPL', 'ABOVE', '350'))
   expect(api.createAlert).toHaveBeenCalledOnce()
-  expect(screen.getByText(/Verified users can opt into email notifications/)).toBeTruthy()
+  expect(screen.queryByText(/Verified users can opt into email notifications/)).toBeNull()
 })
 it('uses provider session status and retains a stale-status warning', async () => {
   vi.mocked(api.getSession).mockResolvedValue({ provider: 'Alpaca', feed: 'IEX', currency: 'USD', coverage: 'IEX', fetchedAt: '2026-11-02T13:00:00Z', stale: true, warning: 'Unavailable', data: { status: 'PRE_MARKET', asOf: '2026-11-02T13:00:00Z', nextOpen: '2026-11-02T14:30:00Z', nextClose: '2026-11-02T21:00:00Z', regularOpen: '2026-11-02T14:30:00Z', regularClose: '2026-11-02T21:00:00Z', timezone: 'America/New_York' } })

@@ -24,6 +24,8 @@ public class SecurityConfiguration {
                                 "/api/auth/csrf", "/api/auth/capabilities", "/api/market/search", "/api/market/session", "/api/market/instruments", "/api/market/*/quote", "/api/market/*/candles", "/api/stocks/*/snapshot", "/api/stocks/*/depth", "/api/stocks/*/trades", "/api/stocks/*/candles").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/stocks", "/api/admin/paper-allocations").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/paper/instruments").permitAll()
+                        .requestMatchers("/api/paper/**").authenticated()
                         .requestMatchers("/api/auth/email-preferences", "/api/auth/email-verification").authenticated()
                         .requestMatchers("/api/watchlist", "/api/watchlist/*", "/api/alerts", "/api/alerts/*", "/api/portfolio").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/orders/me", "/api/orders/*", "/api/orders/*/lifecycle", "/api/stocks/*/order-preview", "/api/stocks/*/balance").authenticated()
