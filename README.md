@@ -1,16 +1,33 @@
 # Verdex · MiniStockExchange
 
+**Live demo:** [verdex-roym.onrender.com](https://verdex-roym.onrender.com/#/markets)
+
 **Verdex** is the web interface for this project. The Java packages, Maven artifact, and repository retain the MiniStockExchange name.
 
 A concurrent Java stock-exchange simulator with price-time matching, limit/market orders, partial fills, amendments, cancellation, and a PostgreSQL-backed REST API.
 
-**Current state:** React dashboard with searchable external stock quotes and historical charts from Alpaca’s IEX feed. PostgreSQL-backed local sandbox trading, accounts, and order management remain separate. Symbol search, saved watchlists, in-app alerts, a local paper portfolio, admin stock registration, and a market-session indicator are implemented. External-price paper trading is available locally for review; see [paper trading](docs/PAPER_TRADING.md).
+**Current state:** Deployed React + Spring Boot application with Alpaca/IEX market data, external-price paper trading, a separate matching-engine sandbox, session authentication, saved watchlists, in-app alerts, and order/portfolio management. Paper Trading gives each account $100,000 virtual cash and ten immediately available stocks. See [paper-trading behavior and API](docs/PAPER_TRADING.md).
 
 Java 17+ · Maven · Spring Boot · Spring Security · PostgreSQL 17 · JPA/Hibernate · Flyway · JUnit
 
-## Hosting preparation
+## Live deployment
 
-Verdex now has a Docker build and a Render Free + Neon Free deployment configuration. The built React frontend can be served by Spring Boot from the same origin. This is **prepared, not yet deployed**; the production writer-handoff implementation still requires review before public trading. See [deployment setup and remaining launch checks](docs/DEPLOYMENT.md).
+Verdex is deployed on **Render Free**, with PostgreSQL hosted on **Neon Free**. A Docker image serves the built React frontend and Spring Boot API from the same HTTPS origin. Deployment is manual from `main`; Flyway applies database migrations during startup.
+
+Render's free service sleeps after inactivity, so the first visit can take a minute or more to wake. Background price-alert and paper-limit checks run only while the server is awake; missed crossings are not replayed. Public email delivery and password recovery are disabled in this free deployment. In-app alerts and username/email sign-in remain available.
+
+See [deployment configuration and recovery procedures](docs/DEPLOYMENT.md) for hosting setup and operational details. Local development runs independently and is not required to keep the live site online.
+
+## Choose your workspace
+
+| View | What it does |
+| --- | --- |
+| **Markets** | External Alpaca/IEX quotes, historical charts, search, watchlists, and in-app price alerts. |
+| **Paper Trading** | Virtual BUY/SELL executions at fresh IEX ask/bid prices during the regular session. All ten starter stocks are available without admin registration. |
+| **My Orders / Portfolio** | Your external-price paper orders, fills, cash, reservations, and holdings. |
+| **Matching Sandbox** | The original price-time matching engine. Users' orders match each other; prices, depth, trades, and candles come from those local executions. Admins register sandbox stocks and allocate demo shares. |
+
+Paper Trading and Matching Sandbox have separate balances, holdings, and order histories. Neither places real brokerage orders. Sandbox history and portfolio remain accessible from links inside Matching Sandbox.
 
 ## Project evolution
 
@@ -47,7 +64,7 @@ TradingController / MarketDataController
       current book    durable history
 ```
 
-Packages: `auth/` security, `user/` accounts, `stock/` metadata, `trading/` commands/persistence/recovery, `marketdata/` local read APIs, and `externalmarket/` isolated Alpaca client/cache/DTOs. External reads never mutate the matching engine or PostgreSQL. Root classes contain the matching core, console demo, and Boot entry point. Tests mirror the feature packages.
+Packages: `auth/` security, `user/` accounts, `stock/` metadata, `trading/` commands/persistence/recovery, `marketdata/` local read APIs, and `externalmarket/` isolated Alpaca client/cache/DTOs. External market-data reads never mutate the matching engine. The separate `paper/` service persists quote-priced virtual orders, fills, cash, and holdings in PostgreSQL. Root classes contain the matching core, console demo, and Boot entry point. Tests mirror the feature packages.
 
 ## Quick start
 
@@ -69,7 +86,7 @@ Set `DB_USERNAME`, `DB_PASSWORD`, `DB_URL`, and `DB_TEST_URL` in `.env`; databas
 
 Check `http://localhost:8080/api/health`. Stop with **Ctrl+C**. Use `mvnw.cmd` on Windows.
 
-Fresh databases have no seeded users/stocks/trades. Register an account, promote an administrator explicitly, register stocks, then submit orders. Empty local market responses are expected before sandbox activity. External quotes and charts use the independently configured Alpaca connection below.
+Fresh databases have no seeded users or trades. Register and sign in to use the ten built-in Paper Trading instruments. Matching Sandbox starts without registered stocks; an administrator registers those separately. Empty sandbox responses are expected before activity. External quotes and charts use the independently configured Alpaca connection below.
 
 For the separate console demo, after building:
 
@@ -83,7 +100,7 @@ Arguments: duration in seconds, order interval in milliseconds, random seed, sel
 
 All external chart ranges fit their real available bars across the panel on initial load and Reset view. Polling preserves the user’s zoom; sparse latest-session data still shows a limited-data notice. No fake trades or idle bars are added. Chart wheel gestures scroll the page. Drag pans the chart; explicit +/− and Reset view buttons control its scale. Vertical touch gestures also remain available for page scrolling.
 
-The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). The app shell separates **Markets**, **Local Exchange**, and **My Orders**, with active navigation and browser back/forward support. Markets shows external prices for ten starter stocks plus saved favorites, IEX session statistics, and candlestick/close-price charts. Local Exchange puts its local chart beside order entry, followed by local depth/trades and order history. My Orders provides a dedicated history view. Trading state stays mounted across view changes, preserving drafts, in-flight requests, and uncertainty blocks. Successful actions show dismissible eight-second notifications; uncertain outcomes remain visible until reviewed.
+The React + TypeScript app lives in `frontend/`, with Vite, strict type checking, plain CSS, and TradingView Lightweight Charts. Use **Node 24 LTS** (`frontend/.nvmrc`). Navigation separates Markets, Paper Trading, My Orders, Portfolio, and Matching Sandbox, with browser back/forward support. Paper Trading puts the external chart beside a quote-priced order ticket. Matching Sandbox retains its own chart, ticket, depth, executions, and history. Mutations wait for backend confirmation; uncertain submissions retain their original idempotency key for explicit review/retry.
 
 ### External market-data setup
 
@@ -101,11 +118,11 @@ The alternative names `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` are also s
 - Chart ranges: latest available session (one-minute bars), one month (hourly bars), and one year (daily bars). Historical requests deliberately exclude the newest 15 minutes. Latest-session lookup searches ten calendar days; bars are split adjusted and returned chronologically without invented idle bars.
 - Symbol search uses Alpaca’s active, tradable US-equity catalog, cached for 12 hours. The paper-account `/v2/assets`, `/v2/clock`, and `/v2/calendar` endpoints are used read-only; no provider orders are submitted. Search returns at most 20 results, and symbols are verified against this catalog.
 - Session status uses provider clock/calendar data, including holidays and early closes, with America/New_York timezone conversion. Extended-hours labels describe time outside the regular session; they do not guarantee IEX data availability.
-- Server caches quotes for 15 seconds and history for 60 seconds, shared across browser requests. The shared response cache is capped at 256 entries and provider requests at 150 per minute per backend instance. At most six watchlist preview cards poll quotes. Provider failures back off for 60 seconds; the last successful response can be served for up to 15 minutes with an explicit stale warning and fetch timestamp. Without data or credentials, show an error/setup state, never simulated replacement prices.
+- Server caches quotes for 15 seconds and history for 60 seconds, shared across browser requests. The shared response cache is capped at 256 entries and provider requests at 150 per minute per backend instance. All ten starter watchlist cards load quotes automatically, sharing the server cache and provider rate limits. Provider failures back off for 60 seconds; the last successful response can be served for up to 15 minutes with an explicit stale warning and fetch timestamp. Without data or credentials, show an error/setup state, never simulated replacement prices.
 - Browser polling pauses in hidden tabs, cancels obsolete requests on stock changes, and preserves chart zoom on refresh. Quote and chart failures are independent.
-- Check provider entitlements and redistribution permissions before public hosting. This integration is configured for local use; it does not establish a brokerage connection.
+- Check provider entitlements and redistribution permissions before public hosting. The deployed app uses server-side provider credentials; it does not establish a brokerage connection or submit real orders.
 
-**Local sandbox orders remain separate:** they match the application's own resting orders, do not route to Alpaca, and do not automatically execute at external quotes. Local book/depth/trades/candles are in the separate Local Exchange view. The standalone V2 console is still a third, in-memory demo.
+**Local sandbox orders remain separate:** they match the application's own resting orders, do not route to Alpaca, and do not automatically execute at external quotes. Local book/depth/trades/candles are in the separate Matching Sandbox view. The standalone V2 console is still a third, in-memory demo.
 
 Start Spring from the repository root in one terminal:
 
@@ -136,9 +153,11 @@ npm test
 npm run build
 ```
 
-`npm run preview` serves the built static files on port 4173 for inspection; it does not configure an API proxy. Production hosting and API routing will be added with deployment. Both development servers bind to localhost. Dependencies are locked in `frontend/package-lock.json`; generated `node_modules/` and `dist/` are ignored by Git.
+`npm run preview` serves the built static files on port 4173 for inspection; it does not configure an API proxy. In production, Spring Boot serves the built frontend and API from the same Render origin; Vite is used only for development. Both development servers bind to localhost. Dependencies are locked in `frontend/package-lock.json`; generated `node_modules/` and `dist/` are ignored by Git.
 
-## Trading workspace
+## Matching Sandbox workspace
+
+This section describes the original matching engine. For external quote-priced execution, use [Paper Trading](docs/PAPER_TRADING.md).
 
 The local ticket includes a **Trade stock** selector synchronized with the local chart, quotes and book; it lists all registered local stocks. Administrators can add symbols using **Admin · Register local stock**. It shows **Local simulated exchange** bid/ask, paper cash and signed holdings. The ticket shows available cash and shares after open-order reservations; new orders cannot borrow cash or short shares. External market · IEX prices never determine local fills.
 
@@ -160,7 +179,7 @@ Order actions are inserted in the same PostgreSQL transaction as order changes a
 ## Personal market tools
 
 - **Saved watchlists:** authenticated users can save up to 20 external instruments. Favorites persist in PostgreSQL and are private to that account. Ten starter cards remain available alongside saved favorites: AAPL, TSLA, NVDA, MSFT, AMZN, GOOGL, META, AMD, AVGO and PLTR. This is a curated list, not a live ranking.
-- **Price alerts:** choose the alert stock independently of the chart using the Alert stock dropdown (Apple/Tesla and watchlist entries) or Find alert stock provider search. Up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate while Markets polls, plus bounded background checks for opted-in email users while the server is awake; missed prices between samples cannot be reconstructed. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. Verified users can opt into queued email alerts; a bounded worker checks while the server is awake. See [email setup and recovery](docs/EMAIL.md). Sleeping hosting can miss crossings; no push-notification delivery is implemented.
+- **Price alerts:** choose the alert stock independently of the chart using the Alert stock dropdown (Apple/Tesla and watchlist entries) or Find alert stock provider search. Up to 20 alerts per account, targeting an observed crossing ABOVE/BELOW a price. Arming records the latest provider price and timestamp. A later, newer trade must cross the threshold; already-passed targets do not fire immediately. Alerts evaluate while Markets polls, plus bounded background checks for opted-in email users while the server is awake; missed prices between samples cannot be reconstructed. Stale responses are skipped, triggered alerts persist with an explicit badge, and newly triggered alerts show a dismissible ten-second in-app toast once. Historical triggers do not replay notifications when the panel reopens. Unavailable checks show a warning. Optional email-alert support exists in the backend, but the deployed free demo disables email delivery and does not show email-notification controls. See [email setup and recovery](docs/EMAIL.md). Sleeping hosting can miss crossings; no push-notification delivery is implemented.
 - **Paper portfolio:** uses $100,000 virtual starting cash and replays committed local trades and funded allocations chronologically. Holdings, average cost, realized/unrealized P/L, cash, and equity use local execution marks, never external Alpaca prices. Open orders reserve cash/shares, and admin demo allocations purchase initial shares at the local reference price. Self-trades net to zero; cancelled/resting orders do not affect the portfolio. Historical replay grows with executed history; this is not a brokerage ledger.
 - **Admin registration:** Local Exchange includes an ADMIN-only form for adding local stocks with a reference price. The existing server-side ADMIN and CSRF checks remain authoritative; registration does not create an externally listed security.
 
@@ -178,7 +197,13 @@ Public GETs require no login or CSRF. Security failures distinguish `AUTHENTICAT
 | DELETE | `/api/watchlist/{symbol}` | Authenticated remove own favorite |
 | GET/POST | `/api/alerts` | Authenticated evaluate/list own alerts / create `{symbol,direction,target}` |
 | DELETE | `/api/alerts/{id}` | Authenticated delete own alert; unknown/other owner gives 404 |
-| GET | `/api/portfolio` | Authenticated own local paper portfolio |
+| GET | `/api/portfolio` | Authenticated Matching Sandbox portfolio |
+| GET | `/api/paper/instruments` | Public ten-stock paper-trading catalog |
+| POST | `/api/paper/orders` | Authenticated quote-priced submission; Idempotency-Key required |
+| GET | `/api/paper/orders?page=0` | Authenticated own paper history |
+| GET/PATCH/DELETE | `/api/paper/orders/{id}` | Own paper order lookup / limit amendment / cancellation |
+| GET | `/api/paper/portfolio` | Independent paper cash, reservations, and positions |
+| GET | `/api/paper/fills?symbol=AAPL` | Own paper fills and source-quote timestamps |
 | GET | `/api/market/instruments` | Public external watchlist and connection configuration status |
 | GET | `/api/market/{symbol}/quote` | Public external Alpaca/IEX quote and source metadata |
 | GET | `/api/market/{symbol}/candles?range=1D` | Public external bars; range `1D`, `1M`, or `1Y` |
@@ -227,8 +252,8 @@ Measured 2026-10-29 with five warmup and ten measured cycles; baseline `5dee98c`
 - A failed mutation may already have committed. On `TRADING_OUTCOME_UNCERTAIN` / `retrySafe: false`, inspect history before retrying. Use an Idempotency-Key to replay the original submission without creating another order.
 - Recovery failure blocks that market. Historical reads remain available if PostgreSQL works.
 - Engine history grows in memory; depth/candle query work is not fully bounded by response limits.
-- No funded balances, settlement, or broker order routing. The paper portfolio is a derived simulation accounting view. External market data does not determine local sandbox fills.
-- Local development only for now. Local SSE invalidation and Docker deployment configuration are implemented; public hosting and further production hardening remain separate.
+- Virtual money only: no real deposits, settlement, or broker order routing. Paper Trading uses external quotes; Matching Sandbox uses its own resting orders. Accounts and holdings are separate.
+- Deployed as a free portfolio demo, not an always-on brokerage. Render/Neon can sleep; background checks can be delayed. Further production hardening and multi-instance coordination remain outside the current scope.
 
 ## Detailed guides
 
@@ -338,7 +363,7 @@ One shared helper fetches a fresh CSRF token before each mutation; login/logout 
 
 ### Email and password recovery
 
-The sign-in dialog includes **Forgot password?**. Optional Resend delivery supports expiring single-use reset links, session/remember-me revocation, inbox verification, and opt-in price-alert emails. It remains disabled until private provider settings are configured. See [setup, guarantees, API, and testing](docs/EMAIL.md).
+When email delivery is configured, the sign-in dialog supports **Forgot password?**. Optional Resend delivery supports expiring single-use reset links, session/remember-me revocation, inbox verification, and opt-in price-alert emails. The public free deployment keeps email delivery and password recovery disabled; local configurations can enable them with private provider settings. See [setup, guarantees, API, and testing](docs/EMAIL.md).
 
 ### Terminal walkthrough
 
@@ -573,7 +598,7 @@ Startup restores active LIMIT orders by `priority_sequence`, not creation time, 
 
 Original quantity remains historical after amendments, so it need not equal filled plus remaining. CANCELLED orders retain unfilled remaining quantity. Trade foreign keys enforce distinct BUY/SELL orders for the same stock. Order versions reject stale database updates. Engine fills use checked integer addition.
 
-Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts, **V9** order action history, **V10** production writer ownership, **V11** idempotency/demo allocations, **V12** email queue and recovery. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
+Flyway migrations: **V1** schema, **V2** stocks, **V3** users, **V4** roles, **V5** orders/trades, **V6** trade time-range index, **V7** remembered-login tokens, **V8** watchlists/alerts, **V9** order action history, **V10** production writer ownership, **V11** idempotency/demo allocations, **V12** email queue and recovery, **V13** external-price paper accounts/orders/fills, **V14** paper execution wall-clock timestamps. Flyway records applied migrations in `public.flyway_schema_history`; add new migrations instead of editing applied ones. Hibernate validates the schema (`ddl-auto=validate`), Open Session in View is disabled, and Flyway clean is disabled.
 
 This design supports **one active backend writer**. The advisory lock does not synchronize cached engines across multiple instances. The production profile additionally checks database writer ownership under that same transaction lock: a replacement atomically restores state and claims ownership, and superseded instances reject trading/cached-book reads. This is a fail-closed deployment handoff, not horizontal scaling; see [recovery procedures](docs/DEPLOYMENT.md#recovery-procedure). All persisted trading must go through `TradingService`; direct repository/SQL changes during trading are unsupported except deliberate maintenance followed by recovery. The service rejects ambient transactions so a caller cannot later roll back data after publication.
 
@@ -651,4 +676,4 @@ API rate limits cover login, registration, trading, external market reads and ot
 
 See [Trading reliability and operations](docs/RELIABILITY.md) for idempotent submission keys, funded admin demo allocations, reservations, protected metrics, liveness/readiness, local SSE reconnect behavior and automated CI.
 
-The portfolio displays USD amounts with `$` and signed P/L. **Sell shares** checks currently available shares and opens a prefilled SELL ticket without submitting it. OPEN orders are labeled **Waiting for a match**; only their outstanding quantity can be amended. The matching admin panels sit together under the local introduction. Admin stock presets fill the symbol/company only; an optional provider-price lookup copies the reported price into the fixed reference field for explicit review and registration. No new local stocks, prices or orders are silently seeded.
+The Matching Sandbox portfolio displays USD amounts with `$` and signed P/L. **Sell shares** checks currently available shares and opens a prefilled SELL ticket without submitting it. OPEN orders are labeled **Waiting for a match**; only their outstanding quantity can be amended. The matching admin panels sit together under the local introduction. Admin stock presets fill the symbol/company only; an optional provider-price lookup copies the reported price into the fixed reference field for explicit review and registration. No new local stocks, prices or orders are silently seeded.
