@@ -22,9 +22,19 @@ Account row locks coordinate reservations, cash, positions, and fills transactio
 
 - Public `GET /api/paper/instruments`
 - Authenticated `POST /api/paper/orders` with Idempotency-Key
-- `GET /api/paper/orders?page=0` and `GET /api/paper/orders/{id}`
+- `GET /api/paper/orders?page=0&status=OPEN` (status optional: OPEN, FILLED, CANCELLED) and `GET /api/paper/orders/{id}`
 - `PATCH /api/paper/orders/{id}` with limitPrice and quantity; `DELETE` cancels
 - `GET /api/paper/fills?symbol=AAPL`
 - `GET /api/paper/portfolio`
 
 Writes require the existing session and CSRF token. Users can access only their own paper orders. Rate limits apply to trading writes.
+
+Order histories refresh every five seconds while visible. Paper ticket drafts and selected stocks survive navigation between workspace views. Status filtering runs in PostgreSQL before pagination, so open orders are discoverable even when newer terminal orders fill the first page.
+
+### Order history and navigation
+
+Paper Trading, My Orders and Portfolio form the primary account workflow. Matching Sandbox has its own secondary navigation and separate orders and portfolio. Neither history mixes the two accounts.
+
+Histories refresh every five seconds while visible. The summary labels counts from an unfiltered page as “on this page”; use “View all open paper orders” for the server-wide total of your OPEN orders. Sandbox OPEN and PARTIALLY_FILLED filters show their respective server totals. Refresh failures retain the displayed rows with a stale warning.
+
+Paper order rows become labelled cards on narrow screens. Stock and ticket drafts survive navigation between paper views. Session restoration retries read-only checks after a connection failure; trading mutations are never automatically retried.

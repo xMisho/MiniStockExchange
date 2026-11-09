@@ -24,7 +24,7 @@ public class PaperTradingController {
         var o=paper.submit(actor(p),r.symbol(),r.side(),r.type(),r.quantity(),r.limitPrice(),key);
         return ResponseEntity.created(java.net.URI.create("/api/paper/orders/"+o.id())).body(o);
     }
-    @GetMapping("/orders") public PaperTradingService.Page orders(Principal p,@RequestParam(defaultValue="0") int page){return paper.orders(actor(p),page);}
+    @GetMapping("/orders") public PaperTradingService.Page orders(Principal p,@RequestParam(defaultValue="0") int page,@RequestParam(required=false) String status){return paper.orders(actor(p),page,status);}
     @GetMapping("/orders/{id}") public PaperTradingService.Order order(Principal p,@PathVariable long id){return paper.order(actor(p),id);}
     @PatchMapping("/orders/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void amend(Principal p,@PathVariable long id,@RequestBody Amend r){if(r==null || r.quantity()==null)throw new IllegalArgumentException("Price and quantity are required.");paper.amend(actor(p),id,r.limitPrice(),r.quantity());}
     @DeleteMapping("/orders/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void cancel(Principal p,@PathVariable long id){paper.cancel(actor(p),id);}

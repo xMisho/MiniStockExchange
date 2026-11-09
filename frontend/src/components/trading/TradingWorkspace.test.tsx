@@ -114,7 +114,7 @@ it('amends remaining quantity, then reloads history and market data', async () =
   expect(await screen.findByText(/Amendment confirmed for order #12/)).toBeTruthy()
   expect(amendOrder).toHaveBeenCalledWith(12, '101.25', '3')
   expect(refreshMarket).toHaveBeenCalledWith('AAPL')
-  expect(getMyOrders).toHaveBeenCalledTimes(2)
+  await waitFor(() => expect(getMyOrders).toHaveBeenCalledTimes(2))
 })
 it('cancels only after the backend confirms and refreshes history', async () => {
   let resolve!: () => void
@@ -125,7 +125,7 @@ it('cancels only after the backend confirms and refreshes history', async () => 
   expect(screen.getByText('#12')).toBeTruthy()
   await act(async () => resolve())
   expect(await screen.findByText(/Cancellation confirmed for order #12/)).toBeTruthy()
-  expect(getMyOrders).toHaveBeenCalledTimes(2)
+  await waitFor(() => expect(getMyOrders).toHaveBeenCalledTimes(2))
 })
 it('resets paging for server-side status filtering', async () => {
   vi.mocked(getMyOrders).mockImplementation(async (index, status) => page(status === 'FILLED' ? [] : [open], index, 51))
@@ -248,4 +248,20 @@ it('retries an uncertain submission explicitly with the identical key and payloa
   await screen.findByText(/Order #12 · AAPL · OPEN/)
   expect(vi.mocked(submitOrder).mock.calls[1]).toEqual(first)
   expect(sessionStorage.getItem('verdex:pending-order:1')).toBeNull()
+})
+
+it('links to sandbox history rather than paper orders',async()=>{
+ render(<TradingWorkspace symbol="AAPL" onShowOrders={()=>{}}/>);
+ expect(screen.getByRole('link',{name:'Open sandbox orders ↗'}).getAttribute('href')).toBe('#/sandbox-orders')
+ await screen.findByText('#12')
+})
+it('refreshes sandbox statuses when another participant fills an order',async()=>{
+ vi.useFakeTimers()
+ try{
+  render(<TradingWorkspace symbol="AAPL"/>);await act(async()=>{})
+  expect(screen.getByText('Waiting for a match')).toBeTruthy()
+  vi.mocked(getMyOrders).mockResolvedValue(page([{...open,status:'FILLED',remainingQuantity:0,filledQuantity:5}]))
+  await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
+  expect(within(screen.getByRole('table')).getByText('FILLED')).toBeTruthy();expect(screen.queryByText('Waiting for a match')).toBeNull()
+ }finally{cleanup();vi.useRealTimers()}
 })

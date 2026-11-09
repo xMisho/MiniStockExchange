@@ -1,36 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { useSymbolResource } from '../../hooks/useSymbolResource'
 import { getMyOrders } from '../../api/orders'
 import { orderStatuses } from '../../types/orders'
-import type { Order, OrderPage, OrderStatus } from '../../types/orders'
+import type { Order, OrderStatus } from '../../types/orders'
 import { formatCount } from '../../utils/format'
 import { OrderRow } from './OrderRow'
 
 interface Props {
-  page: number; status: OrderStatus | ''; revision: number; disabled: boolean; pending: boolean; feedback?: { message: string; uncertain: boolean }
+  active?: boolean; page: number; status: OrderStatus | ''; revision: number; disabled: boolean; pending: boolean; feedback?: { message: string; uncertain: boolean }
   onPage: (page: number) => void; onStatus: (status: OrderStatus | '') => void; onRefresh: () => void
   onAmend: (order: Order, price: string, remaining: string) => Promise<boolean>; onCancel: (order: Order) => Promise<boolean>
 }
-type State = { key: string } & ({ status: 'ready'; data: OrderPage } | { status: 'error'; message: string })
-export function MyOrders({ page, status, revision, disabled, pending, feedback, onPage, onStatus, onRefresh, onAmend, onCancel }: Props) {
-  const [state, setState] = useState<State | null>(null)
-  const key = `${page}:${status}:${revision}`
-  useEffect(() => {
-    const controller = new AbortController()
-    getMyOrders(page, status, controller.signal).then((data) => {
-      if (!controller.signal.aborted) setState({ key, status: 'ready', data })
-    }).catch((error: unknown) => {
-      if (!controller.signal.aborted) setState({ key, status: 'error', message: error instanceof Error ? error.message : 'Couldn’t load your orders.' })
-    })
-    return () => controller.abort()
-  }, [page, status, key])
-  const current = state?.key === key ? state : null
-  const data = current?.status === 'ready' ? current.data : null
+export function MyOrders({ active = true, page, status, revision, disabled, pending, feedback, onPage, onStatus, onRefresh, onAmend, onCancel }: Props) {
+  const load = useCallback((_key: string, signal: AbortSignal) => getMyOrders(page, status, signal), [page, status])
+  const history = useSymbolResource(active ? `${page}:${status}:${revision}` : null, load, 5000)
+  const current = history.resource.status === 'loading' ? null : history.resource.status === 'ready' ? { status: 'ready' as const } : { status: 'error' as const, message: history.errorMessage ?? 'Couldn’t load your orders.' }
+  const data = history.resource.status === 'ready' ? history.resource.data : null
   return <section className="data-panel my-orders" aria-busy={!current} aria-labelledby="my-orders-title" id="my-orders">
     <div className="data-heading"><div><p className="eyebrow">YOUR ACTIVITY</p><h2 id="my-orders-title" tabIndex={-1}>My Orders</h2></div><button type="button" className="text-button" onClick={onRefresh}>Refresh My Orders</button></div>
-    <p className="panel-footnote">OPEN means waiting for a match. Amend changes only the outstanding part of an order; filled shares cannot be amended. To sell shares you own, use Portfolio → Sell shares to create a new SELL order.</p>
+    <p className="panel-footnote">OPEN means waiting for a match. Amend changes only the outstanding part of an order; filled shares cannot be amended. To sell shares you own, use Sandbox portfolio → Sell shares to create a new SELL order.</p>
+    {history.refreshError && data && <p role="status">Couldn’t refresh sandbox orders. Displayed statuses may be stale. <button className="text-button" onClick={history.retry}>Retry status refresh</button></p>}
+    <div className="order-summary" aria-label="Sandbox order summary"><strong>{data ? `${status === 'OPEN' || status === 'PARTIALLY_FILLED' ? data.totalElements : data.content.filter(order => order.status === 'OPEN' || order.status === 'PARTIALLY_FILLED').length} ${status === 'OPEN' || status === 'PARTIALLY_FILLED' ? status.replace('_', ' ').toLowerCase() : 'active'} sandbox orders${status === 'OPEN' || status === 'PARTIALLY_FILLED' ? '' : ' on this page'}` : 'Checking sandbox orders…'}</strong><button className="text-button" onClick={() => onStatus('OPEN')}>View open sandbox orders</button><a href="#/orders">Looking for paper orders?</a></div>
     <div className="order-history-tools"><label>Order status<select value={status} onChange={(event) => onStatus(event.target.value as OrderStatus | '')}>
       <option value="">All statuses</option>{orderStatuses.map((value) => <option value={value} key={value}>{value.replace('_', ' ')}</option>)}
-    </select></label><span>Your orders only · Newest ID first · Times in UTC</span></div>
+    </select></label><span>Matching Sandbox orders only · Newest ID first · Times in UTC · Refreshes every 5 seconds</span></div>
     {!current ? <p className="panel-message" role="status">Loading your orders…</p> : current.status === 'error' ? <div role="alert" className="panel-message"><p>{current.message}</p><button className="primary-button" type="button" onClick={onRefresh}>Retry My Orders</button></div>
       : data && <>
         {data.content.length === 0 ? <div className="empty-orders"><h3>No orders to show</h3><p>No orders on this page{status ? ` with status ${status.replace('_', ' ')}` : ''}. {status ? 'Try another status or view all orders.' : 'Your submitted orders will appear here.'}</p></div> : <div className="order-table-container">

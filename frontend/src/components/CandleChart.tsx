@@ -41,7 +41,7 @@ export function CandleChart({ symbol }: { symbol: string }) {
           </>
         )}
       <p className="chart-attribution">Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView</a> · Lightweight Charts™</p>
-      <RefreshStatus updatedAt={updatedAt} refreshError={refreshError} refreshing={refreshing} onRetry={retry} />
+      <RefreshStatus showActivity updatedAt={updatedAt} refreshError={refreshError} refreshing={refreshing} onRetry={retry} />
     </section>
   )
 }

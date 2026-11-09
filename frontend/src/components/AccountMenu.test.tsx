@@ -222,3 +222,14 @@ it('does not enable recovery while its availability cannot be checked', async ()
   show(); await openLogin()
   expect(screen.getByRole('button', { name: 'Forgot password?' })).toHaveProperty('disabled', true)
 })
+
+it('automatically restores the session after a wake-up timeout',async()=>{
+ vi.useFakeTimers()
+ try{
+  vi.mocked(api.getCurrentUser).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(user)
+  show();await act(async()=>{})
+  expect(screen.getByText(/We’ll retry automatically/)).toBeTruthy()
+  await act(async()=>{await vi.advanceTimersByTimeAsync(10000)})
+  expect(screen.getByText('example')).toBeTruthy();expect(screen.queryByText(/We’ll retry automatically/)).toBeNull()
+ }finally{cleanup();vi.useRealTimers()}
+})

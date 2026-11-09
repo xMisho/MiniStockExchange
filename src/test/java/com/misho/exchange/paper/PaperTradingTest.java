@@ -57,6 +57,17 @@ class PaperTradingTest {
         jdbc.update("DELETE FROM exchange.external_paper_accounts WHERE user_id=?",id);
         jdbc.update("DELETE FROM exchange.users WHERE id=?",id);
     }}
+    @Test void statusFilterFindsOpenOrdersBeyondFirstPageAndKeepsOwnersSeparate(){
+        var open=limit("BUY",1,"1",key());
+        for(int i=0;i<26;i++){var o=limit("BUY",1,"1",key());service.cancel(user,o.id());}
+        assertEquals(25,service.orders(user,0).content().size());
+        var filtered=service.orders(user,0,"OPEN");
+        assertEquals(1,filtered.totalElements());assertEquals(open.id(),filtered.content().get(0).id());
+        assertEquals(26,service.orders(user,0,"CANCELLED").totalElements());
+        assertEquals(0,service.orders(other,0,"OPEN").totalElements());
+        assertThrows(IllegalArgumentException.class,()->service.orders(user,0,"BOGUS"));
+        service.cancel(user,open.id());assertEquals(0,service.orders(user,0,"OPEN").totalElements());
+    }
     @Test void fillsUseAskAndBidAndExternalMarksWithoutTouchingSandbox(){
         var o=buy(10);eq("100",o.executionPrice());assertEquals("FILLED",o.status());
         eq("99000",service.portfolio(user).cash());assertEquals(10,service.portfolio(user).positions().get(0).quantity());
@@ -152,6 +163,9 @@ class PaperTradingTest {
         assertEquals(404,stranger.get("/api/paper/orders/"+id).statusCode());
         assertEquals(404,stranger.changeJson("DELETE","/api/paper/orders/"+id,"",true).statusCode());
         assertEquals(400,client.get("/api/paper/orders?page=-1").statusCode());
+        assertEquals(0,json.readTree(client.get("/api/paper/orders?status=OPEN").body()).path("totalElements").asInt());
+        assertEquals(1,json.readTree(client.get("/api/paper/orders?status=FILLED").body()).path("totalElements").asInt());
+        assertEquals(400,client.get("/api/paper/orders?status=INVALID").statusCode());
     }
 
 }

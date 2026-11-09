@@ -187,10 +187,8 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .workspace-kicker .eyebrow { margin: 0; }
 .update-status { display: inline-flex; gap: 7px; align-items: center; padding: 6px 10px; border-radius: 20px; font-size: 11px; background: #edf4ec; color: #386b4c; }
 .update-status > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.update-status.connected > span { animation: connection-pulse 2.5s ease-in-out infinite; }
 .update-status.warning { background: #faf1e1; color: #8a602c; }
 .update-status.paused { background: #ecefeb; color: #657166; }
-@keyframes connection-pulse { 50% { box-shadow: 0 0 0 4px #3b8a5d18; } }
 .watch-quote { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; justify-content: space-between; width: 100%; margin-top: 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .watch-quote > strong { font-size: 24px; font-weight: 550; letter-spacing: -.6px; }
 .watch-stale { flex-basis: 100%; color: #8a602c; font-size: 11px; }
@@ -389,3 +387,23 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16
 .paper-trading-grid > .candle-panel { grid-column: auto; }
 .paper-trading-grid .trading-form fieldset { display: grid; gap: 18px; }
 .paper-trading-grid .trading-form .primary-button { width: 100%; min-height: 46px; }
+
+/* Keep the simulated matching workspace secondary to the main trading flow. */
+.sandbox-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px; color: var(--muted); font-size: 12px; text-decoration: none; border: 1px solid var(--border); border-radius: 7px; }
+.sandbox-nav a[aria-current="page"] { color: var(--forest); background: #e8f0e6; }
+.order-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-block: 16px; padding: 14px; border-radius: 8px; background: #f3f7f0; }
+.order-summary strong { font-variant-numeric: tabular-nums; }
+.order-summary a { color: var(--forest); font-size: 13px; }
+.amend-form { display: grid; gap: 16px; }
+@media (max-width: 900px) { .sandbox-nav { order: 4; } }
+@media (max-width: 640px) {
+ .paper-order-table { display: block; }
+ .paper-order-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+ .paper-order-table tbody { display: grid; gap: 14px; }
+ .paper-order-table tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+ .paper-order-table td { display: block; text-align: left; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+ .paper-order-table td::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+ .paper-order-table td:last-child { grid-column: 1 / -1; }
+ .paper-order-table button, .amend-form button { min-height: 44px; }
+ .order-summary { align-items: flex-start; flex-direction: column; }
+}

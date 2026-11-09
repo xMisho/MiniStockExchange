@@ -19,17 +19,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { if (!released) { released = true; holds.current--; setSessionHolds(holds.current) } }
   }, [])
   const mutation = useRef(false)
+  const restoring = useRef(false)
   const restore = useCallback(async () => {
-    if (mutation.current || holds.current > 0) return
+    if (mutation.current || holds.current > 0 || restoring.current) return
+    restoring.current = true
     const version = ++generation.current
     try {
       const current = await api.getCurrentUser()
       if (version !== generation.current) return
       setUser(current); setStatus(current ? 'authenticated' : 'anonymous'); setError(null)
     } catch {
-      if (version === generation.current) setError('Couldn’t check your session. Retry when the server is available.')
-    }
+      if (version === generation.current) setError('Couldn’t check your session. The server may be waking up. We’ll retry automatically.')
+    } finally { restoring.current = false }
   }, [])
+  useEffect(() => {
+    if (!error) return
+    const timer = setInterval(() => { if (document.visibilityState !== 'hidden') void restore() }, 10000)
+    return () => clearInterval(timer)
+  }, [error, restore])
   const invalidate = useCallback(() => { generation.current++ }, [])
   useEffect(() => {
     let active = true

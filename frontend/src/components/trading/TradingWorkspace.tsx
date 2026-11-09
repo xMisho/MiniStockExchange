@@ -127,8 +127,8 @@ function AuthenticatedTrading({ symbol, sellIntent, stocks, onSymbolChange, view
       {book && <div className="terminal-book">{book}</div>}
     </div>
     <div hidden={view === 'hidden'} className={view === 'local' ? 'workspace-orders' : undefined}>
-    {view === 'local' && onShowOrders && <a className="text-button orders-view-link" href="#/orders">Open My Orders view ↗</a>}
-    <MyOrders page={page} status={status} revision={revision} disabled={disabled} pending={busy} feedback={notice && notice.kind !== 'success' ? { message: notice.message, uncertain: notice.kind === 'uncertain' } : undefined} onPage={setPage} onStatus={(next) => { setStatus(next); setPage(0) }} onRefresh={refreshOrders} onAmend={amend} onCancel={cancel} />
+    {view === 'local' && onShowOrders && <a className="text-button orders-view-link" href="#/sandbox-orders">Open sandbox orders ↗</a>}
+    <MyOrders active={view !== 'hidden'} page={page} status={status} revision={revision} disabled={disabled} pending={busy} feedback={notice && notice.kind !== 'success' ? { message: notice.message, uncertain: notice.kind === 'uncertain' } : undefined} onPage={setPage} onStatus={(next) => { setStatus(next); setPage(0) }} onRefresh={refreshOrders} onAmend={amend} onCancel={cancel} />
     </div>
   </div>
 }

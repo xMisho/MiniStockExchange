@@ -39,7 +39,7 @@ export function AccountMenu() {
   }
   const changeMode = (next: 'login' | 'register' | 'forgot' | null) => { setMode(next); setRememberMe(false); setPassword(''); setShowPassword(false); setError(null); setMessage(null) }
   return <div className="account-area">
-    {auth.status === 'loading' ? <span>Checking session…</span> : auth.user ? <div className="account-actions">
+    {auth.status === 'loading' ? <span>Connecting to your account…</span> : auth.user ? <div className="account-actions">
       <span>{auth.user.username} <span className="account-role">{auth.user.role}</span></span>
       <button type="button" disabled={auth.busy} onClick={() => { setError(null); void auth.signOut().catch((failure: unknown) => setError(failure instanceof Error ? failure.message : 'Logout failed.')) }}>{auth.busy ? 'Please wait…' : 'Sign out'}</button>
     </div> : <div className="account-actions"><button type="button" disabled={pending || auth.busy} aria-haspopup="dialog" onClick={() => changeMode('login')}>Sign in</button><button type="button" disabled={pending || auth.busy} aria-haspopup="dialog" onClick={() => changeMode('register')}>Create account</button></div>}

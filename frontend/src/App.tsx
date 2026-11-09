@@ -23,14 +23,15 @@ export function VerdexWorkspace() {
   return <><a className="skip-link" href="#main-content">Skip to workspace</a><div className="app-shell">
     <header className="site-header app-header">
       <a className="brand" href="#/markets" aria-label="Verdex home"><span className="brand-mark" aria-hidden="true">V<span>↗</span></span><span>Verdex</span></a>
-      <nav className="primary-nav" aria-label="Primary navigation">{([['markets', 'Markets'], ['paper', 'Paper Trading'], ['orders', 'My Orders'], ['portfolio', 'Portfolio'], ['exchange', 'Matching Sandbox']] as const).map(([key, label]) => <a key={key} href={`#/${key}`} aria-current={view === key ? 'page' : undefined}>{label}</a>)}</nav>
+      <nav className="primary-nav" aria-label="Primary navigation">{([['markets', 'Markets'], ['paper', 'Paper Trading'], ['orders', 'My Orders'], ['portfolio', 'Portfolio']] as const).map(([key, label]) => <a key={key} href={`#/${key}`} aria-current={view === key ? 'page' : undefined}>{label}</a>)}</nav>
+      <nav className="sandbox-nav" aria-label="Developer sandbox"><a href="#/exchange" aria-current={view === 'exchange' || view.startsWith('sandbox-') ? 'page' : undefined}>Matching Sandbox</a></nav>
       <AccountMenu /><RecoveryLink />
     </header>
     <div id="trading-feedback" />
     <main id="main-content" tabIndex={-1}>
       {view === 'markets' && <ExternalMarketDashboard />}
-      {view === 'sandbox-portfolio' && <><section className="dashboard-intro"><p className="eyebrow">LOCAL PAPER ACCOUNT</p><h1>Your paper portfolio.</h1></section><PaperPortfolio key={auth.user?.id ?? 'anonymous'} active /></>}
-      {['paper','orders','portfolio'].includes(view) && <PaperTrading key={view} view={view === 'paper' ? 'trade' : view === 'orders' ? 'orders' : 'portfolio'} />}
+      {view === 'sandbox-portfolio' && <><section className="dashboard-intro"><p className="eyebrow">LOCAL PAPER ACCOUNT</p><h1>Your sandbox portfolio.</h1></section><PaperPortfolio key={auth.user?.id ?? 'anonymous'} active /></>}
+      <div hidden={!['paper','orders','portfolio'].includes(view)}><PaperTrading active={['paper','orders','portfolio'].includes(view)} view={view === 'orders' ? 'orders' : view === 'portfolio' ? 'portfolio' : 'trade'} /></div>
       {view === 'exchange' && <p className="panel-footnote">Independent matching-engine sandbox · <a href="#/sandbox-orders">Sandbox orders</a> · <a href="#/sandbox-portfolio">Sandbox portfolio</a>. For external-price executions, use <a href="#/paper">Paper Trading</a>.</p>}
       <LocalExchange view={view === 'exchange' ? 'local' : view === 'sandbox-orders' ? 'orders' : 'hidden'} onShowOrders={() => { window.location.hash = '/sandbox-orders' }} />
     </main>

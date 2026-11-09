@@ -140,9 +140,18 @@ public class PaperTradingService {
     public void cancel(long user,long id) {
         tx.executeWithoutResult(s->{lock(user);Order o=order(user,id);if(!"OPEN".equals(o.status()))throw new Conflict("This paper order is already terminal.");jdbc.update("UPDATE exchange.external_paper_orders SET status='CANCELLED',updated_at=clock_timestamp() WHERE id=?",id);});
     }
-    public Page orders(long user,int page) {
+    public Page orders(long user,int page) { return orders(user,page,null); }
+    public Page orders(long user,int page,String status) {
         if(page<0 || page>1000000)throw new IllegalArgumentException("Invalid page.");
-        return tx.execute(s->{lock(user);long total=jdbc.queryForObject("SELECT count(*) FROM exchange.external_paper_orders WHERE user_id=?",Long.class,user);return new Page(jdbc.query(SELECT+" WHERE o.user_id=? ORDER BY o.id DESC LIMIT 25 OFFSET ?",this::row,user,page*25),page,25,total,(total+24)/25);});
+        if(status!=null && !Set.of("OPEN","FILLED","CANCELLED").contains(status))throw new IllegalArgumentException("Invalid paper order status.");
+        return tx.execute(s->{
+            lock(user);
+            String filter=status==null?"":" AND o.status=?";
+            Object[] countArgs=status==null?new Object[]{user}:new Object[]{user,status};
+            Object[] pageArgs=status==null?new Object[]{user,page*25}:new Object[]{user,status,page*25};
+            long total=jdbc.queryForObject("SELECT count(*) FROM exchange.external_paper_orders o WHERE o.user_id=?"+filter,Long.class,countArgs);
+            return new Page(jdbc.query(SELECT+" WHERE o.user_id=?"+filter+" ORDER BY o.id DESC LIMIT 25 OFFSET ?",this::row,pageArgs),page,25,total,(total+24)/25);
+        });
     }
     public List<Order> fills(long user,String symbol) { return jdbc.query(SELECT+" WHERE o.user_id=? AND o.symbol=? AND o.status='FILLED' ORDER BY f.executed_at DESC,o.id DESC LIMIT 100",this::row,user,symbol(symbol)); }
     public Portfolio portfolio(long user) {

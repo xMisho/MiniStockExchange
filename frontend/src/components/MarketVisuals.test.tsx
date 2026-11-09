@@ -41,22 +41,16 @@ it('reports connection, retry and paused states without pretending polling is a 
   fireEvent(window, new Event('offline'))
   expect(screen.getByRole('status').textContent).toBe('Offline')
 })
-it('flashes real price changes and respects reduced-motion preferences', () => {
-  const cancel = vi.fn(), animate = vi.fn(() => ({ cancel }))
+it('updates prices without flashing outside charts', () => {
+  const animate = vi.fn()
   Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate })
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
   const view = render(<PriceValue value={100} />)
-  expect(animate).not.toHaveBeenCalled()
   view.rerender(<PriceValue value={101} />)
-  expect(animate).toHaveBeenCalledOnce()
-  view.rerender(<PriceValue value={101} />)
-  expect(animate).toHaveBeenCalledOnce()
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+  expect(screen.getByText('101.00')).toBeTruthy()
   view.rerender(<PriceValue value={99} />)
-  expect(animate).toHaveBeenCalledOnce()
-  expect(cancel).toHaveBeenCalledOnce()
+  expect(screen.getByText('99.00')).toBeTruthy()
+  expect(animate).not.toHaveBeenCalled()
   delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate
-  vi.unstubAllGlobals()
 })
 it('bounds quote previews and reuses the selected stock snapshot', async () => {
   const stocks = Array.from({ length: 8 }, (_, index) => ({ symbol: index === 0 ? 'AAPL' : `TEST${index}`, companyName: `Company ${index}`, referencePrice: 100 }))

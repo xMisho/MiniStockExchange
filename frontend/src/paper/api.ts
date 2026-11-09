@@ -6,8 +6,8 @@ export interface PaperPosition { symbol: string; quantity: number; reservedShare
 export interface PaperPortfolio { cash: number; reservedCash: number; availableCash: number; equity: number | null; realizedPnl: number; unrealizedPnl: number | null; positions: PaperPosition[] }
 export interface PaperRequest { symbol: string; side: 'BUY' | 'SELL'; type: 'LIMIT' | 'MARKET'; quantity: number; limitPrice?: string; key: string }
 function order(v: unknown): v is PaperOrder { return isRecord(v) && Number.isSafeInteger(v.id) && typeof v.symbol === 'string' && ['BUY','SELL'].includes(String(v.side)) && ['MARKET','LIMIT'].includes(String(v.type)) && ['OPEN','FILLED','CANCELLED'].includes(String(v.status)) && Number.isSafeInteger(v.quantity) && typeof v.createdAt === 'string' && (v.executionPrice === null || isFiniteNumber(v.executionPrice)) }
-export async function orders(page: number, signal?: AbortSignal): Promise<PaperPage> {
- const v: unknown = await (await authenticatedRequest(`/api/paper/orders?page=${page}`, signal)).json()
+export async function orders(page: number, signal?: AbortSignal, status = ''): Promise<PaperPage> {
+ const v: unknown = await (await authenticatedRequest(`/api/paper/orders?page=${page}${status ? `&status=${encodeURIComponent(status)}` : ''}`, signal)).json()
  if (!isRecord(v) || !Array.isArray(v.content) || !v.content.every(order) || v.page !== page || v.size !== 25 || !Number.isSafeInteger(v.totalElements) || !Number.isSafeInteger(v.totalPages)) throw new Error('Invalid paper order history.')
  return v as unknown as PaperPage
 }
